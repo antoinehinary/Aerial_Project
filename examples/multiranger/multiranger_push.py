@@ -50,7 +50,7 @@ from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils import uri_helper
 from cflib.utils.multiranger import Multiranger
 
-URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
+URI = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 
 if len(sys.argv) > 1:
     URI = sys.argv[1]
@@ -71,11 +71,14 @@ def is_close(range):
 if __name__ == '__main__':
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
+    DEFAULT_HEIGHT = 0.4
 
     cf = Crazyflie(rw_cache='./cache')
     with SyncCrazyflie(URI, cf=cf) as scf:
-        with MotionCommander(scf) as motion_commander:
+        with MotionCommander(scf, default_height=DEFAULT_HEIGHT) as motion_commander:
+            print("Should have taken off")
             with Multiranger(scf) as multiranger:
+                print("Flying")
                 keep_flying = True
 
                 while keep_flying:
