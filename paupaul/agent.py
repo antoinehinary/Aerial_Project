@@ -132,8 +132,9 @@ class Agent():
         v = rotmat(-self.yaw) @ v_des
         
         z = self.z_target
-        yaw = np.clip(self.height, a_min=0, a_max=0.5)
-        control_command = [v[0], v[1], z, yaw]
+        # yaw = np.clip(self.height, a_min=0, a_max=0.5)
+        yaw_rate = 0.5
+        control_command = [v[0], v[1], z, yaw_rate]
                        # roll/pitch/yaw_Rate/thrust
  
         return control_command

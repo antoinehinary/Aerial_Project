@@ -33,12 +33,22 @@ import cflib.crtp  # noqa
 from cflib.crazyflie import Crazyflie
 from cflib.crazyflie.log import LogConfig
 from cflib.utils import uri_helper
+from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
+from cflib.positioning.motion_commander import MotionCommander
+from cflib.utils.multiranger import Multiranger
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 
 # Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
 
+def is_close(range):
+    MIN_DISTANCE = 200  # m
+
+    if range is None:
+        return False
+    else:
+        return range < MIN_DISTANCE
 
 class LoggingExample:
     """
@@ -82,6 +92,8 @@ class LoggingExample:
         self._lg_stab.add_variable('range.back')
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
+        self._lg_stab.add_variable('range.up')
+
         # The fetch-as argument can be set to FP16 to save space in the log packet
         # self._lg_stab.add_variable('pm.vbat', 'FP16')
 
@@ -141,6 +153,7 @@ from simple_pid import PID
 if __name__ == '__main__':
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
+    crf = Crazyflie(rw_cache='./cache')
 
     le = LoggingExample(uri)
     cf = le._cf
@@ -149,7 +162,10 @@ if __name__ == '__main__':
     time.sleep(0.1)
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
-    
+
+    # cf.commander.send_hover_setpoint(0, 0, 0, 0.6)
+    # time.sleep(1)
+
     robot = Agent(le.sensor_data, 5.0/1000)
     robot.update(le.sensor_data, 5.0/1000)
     
@@ -165,14 +181,23 @@ if __name__ == '__main__':
     # so this is where your application should do something. In our case we
     # are just waiting until we are disconnected.
     while robot.alive:
-        
+
+        # print(le.sensor_data["range.up"])
+
+        if is_close(le.sensor_data["range.up"]):
+            break
+
         time.sleep(0.01)
         robot.update(le.sensor_data, 5.0/1000)
         vx, vy, z, yaw_rate = robot.state_update()
-        vz = -2*(le.sensor_data["stateEstimate.z"] - z)
-        print(le.sensor_data["stateEstimate.z"])
-        cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
-        
+        # vz = -*(le.sensor_data["stateEstimate.z"] - z)
+        # print(le.sensor_data["stateEstimate.z"])
+        # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
+        print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
+        print("command", [vx, vy, yaw_rate])
+        # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
+        cf.commander.send_hover_setpoint(vx, vy, 0, z)
+
     cf.commander.send_stop_setpoint()
     cf.close_link()
     
