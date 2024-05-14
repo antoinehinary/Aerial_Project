@@ -38,7 +38,10 @@ from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils.multiranger import Multiranger
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
-
+HEIGHT_COEFF = 100
+starting_edge = False
+ending_edge = False
+start_search = False
 # Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
 
@@ -182,6 +185,10 @@ if __name__ == '__main__':
     # The Crazyflie lib doesn't contain anything to keep the application alive,
     # so this is where your application should do something. In our case we 
     # are just waiting until we are disconnected.
+    height_vect = []
+    diff_height_vect = []
+    i=0
+
     while robot.alive:
 
         if is_close(le.sensor_data["range.up"]):
@@ -190,8 +197,41 @@ if __name__ == '__main__':
         # print(le.sensor_data["range.left"])
         # print(le.sensor_data["range.right"])
         # print(le.sensor_data["range.front"])
-        # print(le.sensor_data["range.back"])   
-        print(le.sensor_data["stateEstimate.z"]) 
+        # print(le.sensor_data["range.back"])  
+
+        if le.sensor_data["stateEstimate.z"] > 0.5 :
+            start_search = True
+
+        if start_search == True:
+            height_vect.append(le.sensor_data["stateEstimate.z"]*HEIGHT_COEFF) 
+
+            #print(le.sensor_data["stateEstimate.z"])
+            if i > 40:
+                height_vect.pop(0)
+            else :
+                i += 1
+            #print("vect : ", vect)
+
+            height_diff = height_vect[i-1] - height_vect[0]
+            #print("height: ", height_diff)
+
+
+            diff_height_vect.append(height_diff)
+
+            if i > 30:
+                diff_height_vect.pop(0)
+
+            diff_sum = np.sum(diff_height_vect)
+            if diff_sum < 0 :
+                print("start")
+                if i > 30:
+                    starting_edge = True
+            if starting_edge == True:
+                if diff_sum > 0:
+                    ending_edge = True
+                    print("end")
+
+
         # print(le.sensor_data["v.z"]) 
 
         time.sleep(0.01)
@@ -206,7 +246,7 @@ if __name__ == '__main__':
         # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
         # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
 
-        cf.commander.send_hover_setpoint(0, 0, 0, z)
+        cf.commander.send_hover_setpoint(0.3 , 0, 0, z)
         
 
     cf.commander.send_stop_setpoint()
