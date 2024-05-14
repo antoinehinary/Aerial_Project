@@ -79,12 +79,15 @@ if __name__ == '__main__':
                 keep_flying = True
 
                 while keep_flying:
-                    VELOCITY = 0.5
-                    velocity_x = 0.0
+                    VELOCITY = 0.3
+                    HALF_VELOCITY = 0.15
+                    THIRD_VELOCITY = 0.1
+                    velocity_x = VELOCITY
                     velocity_y = 0.0
 
                     if is_close(multiranger.front):
-                        velocity_x -= VELOCITY
+                        velocity_x = THIRD_VELOCITY
+                        velocity_y = HALF_VELOCITY
                     if is_close(multiranger.back):
                         velocity_x += VELOCITY
 
