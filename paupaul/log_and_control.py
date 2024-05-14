@@ -166,8 +166,10 @@ if __name__ == '__main__':
     # cf.commander.send_hover_setpoint(0, 0, 0, 0.6)
     # time.sleep(1)
 
-    robot = Agent(le.sensor_data, 5.0/1000)
-    robot.update(le.sensor_data, 5.0/1000)
+    robot = Agent(le.sensor_data, 0.1)
+    robot.update(le.sensor_data, 0.1)
+
+    crf = Crazyflie(rw_cache='./cache')
     
     # z_pid = PID(2.5, 0.0, 1.0, proportional_on_measurement=True)
     # def send_velocity_world_setpoint(self, vx, vy, vz, yawrate):
@@ -178,25 +180,32 @@ if __name__ == '__main__':
     #     yawrate is in degrees/s
     
     # The Crazyflie lib doesn't contain anything to keep the application alive,
-    # so this is where your application should do something. In our case we
+    # so this is where your application should do something. In our case we 
     # are just waiting until we are disconnected.
     while robot.alive:
-
-        # print(le.sensor_data["range.up"])
 
         if is_close(le.sensor_data["range.up"]):
             break
 
+        # print(le.sensor_data["range.left"])
+        # print(le.sensor_data["range.right"])
+        # print(le.sensor_data["range.front"])
+        # print(le.sensor_data["range.back"])       
+
         time.sleep(0.01)
-        robot.update(le.sensor_data, 5.0/1000)
+
+        robot.update(le.sensor_data, 0.01)
         vx, vy, z, yaw_rate = robot.state_update()
         # vz = -*(le.sensor_data["stateEstimate.z"] - z)
         # print(le.sensor_data["stateEstimate.z"])
         # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
-        print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
-        print("command", [vx, vy, yaw_rate])
-        # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
-        cf.commander.send_hover_setpoint(vx, vy, 0, z)
+        # print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
+        # print("command", [vx, vy, z, yaw_rate])
+        cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
+        # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
+
+        # cf.commander.send_hover_setpoint(vx, vy, 0, z)
+        
 
     cf.commander.send_stop_setpoint()
     cf.close_link()

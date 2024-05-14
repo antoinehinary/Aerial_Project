@@ -46,7 +46,7 @@ class Agent():
         self.pos = np.array([sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y']])
         
         self.height = sensor_data['stateEstimate.z']
-        self.yaw = sensor_data['stabilizer.yaw']
+        self.yaw = sensor_data['stabilizer.yaw']*np.pi/180
         
     def state_update(self):
         
@@ -69,7 +69,7 @@ class Agent():
     def update_obstacles(self):
 
         sensors = ['range.front', 'range.left', 'range.back', 'range.right']
-        obstacles = [self.pos + self.sensor_data[sensor]*direction_vector(self.yaw + i*np.pi/2) for i, sensor in enumerate(sensors)]
+        obstacles = [self.pos + self.sensor_data[sensor]*direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
         self.obst = sorted(np.concatenate([self.obst, obstacles], axis=0).tolist(), key=lambda x: np.linalg.norm(x-self.pos))
         self.obst = np.asarray(self.obst)[0:4] # keep only 4 nearest
         
@@ -102,7 +102,7 @@ class Agent():
     def find_landing(self):
         
         # self.goal = self.starting_pos + np.array([4,0])
-        self.goal = np.array([2, 0])
+        self.goal = np.array([4, 0])
 
         control_command = self.go_to()
         return control_command
