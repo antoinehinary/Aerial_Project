@@ -33,7 +33,7 @@ from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils import uri_helper
 
-URI = uri_helper.uri_from_env(default='radio://0/80/2M/E7E7E7E7E7')
+URI = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 
 DEFAULT_HEIGHT = 0.5
 BOX_LIMIT = 0.5
