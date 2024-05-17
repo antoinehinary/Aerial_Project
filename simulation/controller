@@ -1,0 +1,691 @@
+import numpy as np
+import math
+import cv2
+
+
+# Global variables
+on_ground = True
+timer = None
+startpos = None
+timer_done = None
+
+
+# Occupancy map based on distance sensor
+min_x, max_x = 0, 5.0 # meter
+min_y, max_y = 0, 3.0 # meter
+range_max = 2.0 # meter, maximum range of distance sensor
+res_pos = 0.1 # meter
+conf = 0.2 # certainty given by each measurement
+landing_zone = (37, 15) # for landing search 37 -> 3.7/res_pos for starting point
+
+
+# Speed and angle variables
+MAX_SPEED_SEARCH = 0.2
+HALT_SPEED = 0
+RESET = 0
+heightDesiredGoal = 0
+height_desired = 0.8
+sensor_threshold = 0.2
+position_threshold = 0.2
+start_angle = 0
+initial_speed = 0.2
+forward_speed = 0
+vy = 0
+vx = 0
+
+
+# Drone State 
+state = "TURN"
+scan_state = "START"
+prev_state = None
+landing_path_found = False
+target_position = None
+pathCreated = False
+prev_range = None
+path = None
+lastPos = np.array([0,0])
+
+
+# Landing variables
+diff_valid =  True
+comp_points = None
+landing_position = None
+start_position = False
+landing_path = None
+final_target = False
+
+
+# counting variables
+counterPos = RESET
+i = 1
+j = 1
+k = RESET
+counter = RESET
+
+
+def get_command(sensor_data, camera_data, dt):
+    global on_ground, startpos, start_angle, MAX_SPEED_SEARCH, scan_state, forward_speed, vx, height_desired, vy, pathCreated, path, scan_state, state, map, sensor_threshold
+    global res_pos, current_idx, counter, switch_direciton, start_position, landing_zone, landing_path_found,landing_path, prev_state, k, i, j
+    global diff_valid, prev_range, vistedMap, comp_points, counterPos, lastPos, final_target, landing_position
+    
+
+    if startpos is None:
+        startpos = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down']]    
+    if on_ground and sensor_data['range_down'] < 0.49:
+        control_command = [HALT_SPEED, HALT_SPEED, height_desired, HALT_SPEED]
+        return control_command
+    else:
+        on_ground = False
+
+    if state == "TAKE_OFF":
+        if height_desired < heightDesiredGoal:
+            height_desired += 0.01
+        else:
+            state = "GO_HOME"
+    elif state == "OBSTACLE":
+        forward_speed = HALT_SPEED
+        check_obstacle(sensor_data)
+    elif state == "TURN":
+        if rotate(sensor_data):
+            vx = vy = forward_speed = HALT_SPEED
+            if prev_state == None:
+                state = "SEARCH_FOR_PINK"
+                scan_state = "START"
+                prev_state = "TURN"
+            elif prev_state == "ALIGN_TO_SQUARE":
+                state = "NAVIGATION"
+            else:
+                prev_state = "TURN"
+                state = "ALIGN"
+    elif state == "SEARCH_FOR_PINK":
+        out_of_bounds = (sensor_data['y_global'] < 0.1) or (sensor_data['y_global'] > 2.9) or (sensor_data['x_global'] < 0.1) or (sensor_data['x_global'] > 4.9)
+        if out_of_bounds:
+            check_in_bounds(sensor_data)
+        if rotate(sensor_data, search = True, camera_data = camera_data):
+            scan_state = "START"
+            state = "ALIGN_TO_SQUARE"
+    elif state == "ALIGN":
+        if align(sensor_data):
+            vx = vy = forward_speed = HALT_SPEED
+            prev_state = "ALIGN"
+            state = "TURN"
+    elif state == "REALIGNEMENT":
+        out_of_bounds = (sensor_data['y_global'] < 0.1) or (sensor_data['y_global'] > 2.9) or (sensor_data['x_global'] < 0.1) or (sensor_data['x_global'] > 4.9)
+        if out_of_bounds:
+            check_in_bounds(sensor_data)
+        if search_pink_square(camera_data):
+            state = "ALIGN_TO_SQUARE"
+        if sensor_data["y_global"] < position_threshold:
+            vy = initial_speed
+        elif sensor_data["y_global"] > 2.8:
+            vy = -initial_speed
+        forward_speed = 0
+        switch_direciton = (sensor_data["range_left"] < sensor_threshold and vy > 0) or (sensor_data["range_right"] < sensor_threshold and vy < 0)
+        if switch_direciton:   
+            vy *= -1
+            state = "SEARCH_FOR_PINK"
+            scan_state = "START"
+            vx = vy = forward_speed = HALT_SPEED
+            prev_state = "REALIGNEMENT"
+    elif state == "ALIGN_TO_SQUARE":
+        check_obstacle(sensor_data)
+        search_pink_square(camera_data, sensor_data, moving = True)
+    elif state == "NAVIGATION":
+        out_of_bounds = (sensor_data['y_global'] < 0.1) or (sensor_data['y_global'] > 2.9) or (sensor_data['x_global'] < 0.1) or (sensor_data['x_global'] > 4.9)
+        if out_of_bounds:
+            check_in_bounds(sensor_data)
+        current_position = (round(sensor_data["x_global"]/res_pos), round(sensor_data["y_global"]/res_pos))
+        vistedMap[current_position[0], current_position[1]] = 1
+        if np.linalg.norm(lastPos-np.array(current_position)) > position_threshold:
+            lastPos = np.array(current_position)
+            counterPos = RESET
+        else:
+            counterPos += 1
+            if counterPos > 1000:
+                counterPos = RESET
+                print("Drone stuck")
+                current_idx = -1
+        if sensor_data["range_down"] < height_desired-0.08:
+            vx = vy = forward_speed = HALT_SPEED
+            state = "LAND"
+        if pathCreated == False:
+            while 1:
+                if map[landing_zone[0], landing_zone[1]] <= 0:
+                    landing_zone = (landing_zone[0], landing_zone[1]+(i*j))
+                    i *= -1
+                    if i == 1:
+                        j += 1
+                else:
+                    break          
+            path = aStar(current_position,landing_zone, map, dontExpand=True)
+            if path.any() != False:
+                vx = vy = forward_speed = HALT_SPEED
+                current_idx = RESET
+                pathCreated = True
+            else:
+                forward_speed = initial_speed
+        elif current_idx==-1:
+            if scan_state == "START":
+                vx = vy = forward_speed = HALT_SPEED
+            while 1:
+                indexPtX = np.random.randint(landing_zone[0], map.shape[0])
+                indexPtY = np.random.randint(0, map.shape[1])
+                if map[indexPtX, indexPtY] > 0 and vistedMap[indexPtX, indexPtY] == 0:
+                    break
+            if align(sensor_data):
+                path = aStar(current_position,(indexPtX,indexPtY), map)
+                if path.any() != False:
+                    current_idx = RESET
+                else:
+                    if rotate(sensor_data):
+                        current_idx = -1
+        else:
+            follow_path(sensor_data)
+
+    elif state == "LAND":
+        current_position = (sensor_data["x_global"], sensor_data["y_global"])
+        if not landing_path_found:
+            diff_valid =  True
+            prev_range = sensor_data["range_down"]
+            vx = vy = forward_speed = HALT_SPEED
+            landing_path_found = True
+            comp_points = np.zeros(4)
+            landing_position = current_position
+            landing_path = create_landing_path(current_position, height_desired)
+            path = landing_path
+            k=0
+            
+        if prev_range-sensor_data["range_down"] < -0.05:
+            diff_valid =  False
+        elif prev_range-sensor_data["range_down"] > 0.05 and not diff_valid:
+            diff_valid =  True
+
+
+        forward_speed = landing_path[k][0]-current_position[0]
+        vy = landing_path[k][1]-current_position[1]
+        vx = landing_path[k][3]-sensor_data["yaw"]
+        prev_range = sensor_data["range_down"]
+        if abs(forward_speed) < 0.01 and abs(vy) < 0.01:
+            if (k+1) % 2 != 0:
+                comp_points[int(k/2)] = 1 if diff_valid else RESET
+            k += 1
+            if k == 8:
+                k = -1
+        if k==-1:
+            landing_position = adjust_landing(comp_points, landing_position)
+    elif state == "FOUND_LANDING_PAD":
+        current_position = (sensor_data["x_global"], sensor_data["y_global"])
+        forward_speed = landing_position[0]-current_position[0]
+        vy = landing_position[1]-current_position[1]
+        if abs(forward_speed) < 0.01 and abs(vy) < 0.01:
+            state = "LANDING"    
+    elif state == "LANDING":
+        vx = vy = forward_speed = HALT_SPEED
+        if height_desired:
+            height_desired -= 0.01 
+        if sensor_data["range_down"] <= 0.12:
+            counter += 1
+            vx = vy = forward_speed = HALT_SPEED
+            if counter > 50:
+                counter = RESET
+                if final_target:
+                    vx = vy = forward_speed = HALT_SPEED
+                else:
+                    state = "TAKE_OFF"
+    elif state == "GO_HOME":
+        current_position = (round(sensor_data["x_global"]/res_pos), round(sensor_data["y_global"]/res_pos))
+        if (abs(startpos[0]-sensor_data["x_global"]) < 0.11 and abs(startpos[1]-sensor_data["y_global"]) < 0.11):
+            state = "LAND"
+            final_target = True
+        else:
+            if start_position == False:
+                path = aStar(current_position,(round(target_position[0]/res_pos)+int(0.3/res_pos), round(target_position[1]/res_pos)),map)
+                path2 = aStar((round(target_position[0]/res_pos), round(target_position[1]/res_pos)),(round(startpos[0]/res_pos), round(startpos[1]/res_pos)), map)
+                path = np.concatenate((path, path2))
+                if path.any() != False:
+                    current_idx = RESET
+                    start_position = True
+            else:
+                follow_path(sensor_data)
+    else:
+        vx = vy = forward_speed = HALT_SPEED
+    map = occupancy_map(sensor_data)
+    control_command = [forward_speed, vy, height_desired, vx]
+    return control_command 
+
+
+def adjust_landing(comp_points, pad_land):
+    global landing_path_found, state
+    adjustments = [(-0.1, 0), (0, -0.1), (0.1, 0), (0, 0.1)]
+    for index, point in enumerate(comp_points):
+        if not point:
+            pad_land = (pad_land[0] + adjustments[index][0], pad_land[1] + adjustments[index][1])
+    landing_path_found = False
+    state = "FOUND_LANDING_PAD"
+    
+    return pad_land
+
+
+
+    
+
+##################################### MAP SCANING FUNCTION ########################################
+
+# Scanning for the creation of the occupancy map 
+def rotate(sensor_data, search = False, camera_data = None):
+    global scan_state, start_angle, state, vy, forward_speed, vx, height_desired
+    if scan_state == "START":
+        start_angle = sensor_data['yaw']
+        scan_state = "IN_PROGRESS"
+    if abs(abs(sensor_data['yaw'])-np.pi) < 0.1:
+        scan_state = "DONE"
+    if scan_state == "DONE" and abs(abs(sensor_data['yaw'])-abs(start_angle)) < 0.1:
+        scan_state = "START"
+        return True
+    if search:
+        if search_pink_square(camera_data):
+            vx = vy = forward_speed = HALT_SPEED
+            state = "ALIGN_TO_SQUARE"
+            return False
+    occupancy_map(sensor_data)
+    vx = 2
+    return False
+
+
+##################################### PINK SQUARE DETECTION ########################################
+def search_pink_square(camera_data, sensor_data = None, moving = False):
+    global height_desired, state, target_position, scan_state, forward_speed, vx, vy, prev_state, heightDesiredGoal
+
+
+    LOWER_PINK_TRESHOLD = 100000
+    UPPER_PINK_TRESHOLD = 20000000
+
+    lower_mask = np.array([140, 50, 50])
+    higher_mask = np.array([160, 255, 255])
+    hsv_image = cv2.cvtColor(camera_data, cv2.COLOR_BGR2HSV)
+    pink_mask = cv2.inRange(hsv_image, lower_mask, higher_mask)
+    moments = cv2.moments(pink_mask)
+    if moments["m00"] > LOWER_PINK_TRESHOLD:
+        #calculate x and y of the pink object
+        x = int(moments["m10"] / moments["m00"])
+        y = int(moments["m01"] / moments["m00"])
+
+        if not moving:
+            return True
+        else:
+            if moments["m00"] > UPPER_PINK_TRESHOLD:
+                scan_state = "START"
+                vx = vy = forward_speed = HALT_SPEED
+                prev_state = "ALIGN_TO_SQUARE"
+                state = "TURN"
+                target_position = (sensor_data['x_global'], sensor_data['y_global'])
+                heightDesiredGoal = height_desired
+                return True
+
+            forward_speed = 0.5
+            vx = (150 - x)/40
+            if y < 140:
+                height_desired += 0.001
+            elif y > 160:
+                height_desired -= 0.001
+            if abs(y-150) > 10:
+                forward_speed = forward_speed/abs(y-150)
+            return
+        
+    elif moving:
+        if sensor_data["x_global"] > 2.45:
+            scan_state = "START"
+            vx = vy = forward_speed = HALT_SPEED
+            state = "TURN"
+            target_position = np.array([sensor_data['x_global'], sensor_data['y_global']])
+        else:
+            state= "REALIGNEMENT"
+            vy = initial_speed if sensor_data["y_global"] < 1.5 else -initial_speed
+        return False
+
+    else:
+        return False
+    
+# Aligning facing forward
+def align(sensor_data):
+    global forward_speed, vx, height_desired, vy, state
+    yaw_drone = sensor_data['yaw']
+    kp = abs(-yaw_drone*0.6)
+
+    if np.abs(-yaw_drone) < 0.01:
+        vx = vy = forward_speed = HALT_SPEED
+        return True
+    if -yaw_drone > 0:
+        vx = kp
+        return False
+    else:
+        vx = -kp
+        return False
+
+
+
+##################################### OBSTACLE DETECTION ########################################
+
+def check_obstacle(sensor_data):
+    global state, map, forward_speed, vx, vy, prev_state
+    if state != "OBSTACLE":
+        prev_state = state
+
+    horizon = 1
+    direction = 1 # if sensor_data['yaw'] > 0 and sensor_data['yaw'] < np.pi else -1
+    direction *= horizon
+    idx_x = int((sensor_data['x_global'] - min_x)/res_pos)
+    idx_y = int((sensor_data['y_global'] - min_y)/res_pos)
+    # Try - Except to avoid/bypass indexing errors
+    try:
+        if  map[idx_x+direction, idx_y+horizon] < 0 and map[idx_x+direction, idx_y] < 0:    
+            state = "OBSTACLE"
+            forward_speed = vx = HALT_SPEED
+            vy = initial_speed
+            return True
+    except:
+            state = "OBSTACLE"
+            forward_speed = vx = HALT_SPEED
+            vy = initial_speed
+            return True
+    try:
+        if map[idx_x + direction, idx_y] < 0 or map[idx_x + direction, idx_y-horizon]< 0:
+            state = "OBSTACLE"
+            forward_speed = HALT_SPEED
+            vx = HALT_SPEED
+            vy = initial_speed
+            return True
+    except:
+        state = "OBSTACLE"
+        forward_speed = HALT_SPEED
+        vx = HALT_SPEED
+        vy = initial_speed
+        return True
+
+    vx = vy = forward_speed = HALT_SPEED
+    if prev_state == "ALIGN_TO_SQUARE" and state == "OBSTACLE":
+        state = "SEARCH_FOR_PINK"
+        prev_state = None
+    else:
+        state = prev_state
+
+    return False
+    
+
+############################################################################################################
+# Helper functions
+############################################################################################################
+
+def hover():
+    global vy, vx, forward_speed
+    vy = RESET
+    vx = RESET
+    forward_speed = RESET
+    return
+
+
+def reconstructPath(cameFrom, current):
+    total_path = [current]
+    while current in cameFrom.keys():
+        total_path.insert(0, cameFrom[current]) 
+        current=cameFrom[current]
+    return total_path
+
+
+def follow_path(sensor_data):
+    global path, current_idx, scan_state, forward_speed, vy, vx, height_desired
+    global counterPos, lastPos
+
+    scan_state = "START"
+    conCom = path_to_setpoint(path, sensor_data)
+    forward_speed,vy,_,vx = np.array([conCom[0]-sensor_data["x_global"], conCom[1]-sensor_data["y_global"], conCom[2], conCom[3]-sensor_data["yaw"]])
+    
+    if abs(forward_speed) > MAX_SPEED_SEARCH:
+        forward_speed = MAX_SPEED_SEARCH*forward_speed/abs(forward_speed)
+    if abs(vy) > MAX_SPEED_SEARCH:
+        vy= MAX_SPEED_SEARCH*vy/abs(vy)
+
+
+def check_in_bounds(sensor_data):
+    print("In bounds check")
+    drone_x = sensor_data['x_global']
+    drone_y = sensor_data['y_global']
+    drone_yaw = sensor_data['yaw']
+
+    # Convert global coordinates to grid indices
+    map_x = int(drone_x * (25 / 5))
+    map_y = int(drone_y * (15 / 3))
+
+    boundary_threshold = 2
+    vx, vy = 0.0, 0.0 
+    yaw_rate = 0.0  
+
+    if map_x <= boundary_threshold:
+        vx += (boundary_threshold - map_x) * 0.3 
+    elif map_x >= 25 - boundary_threshold:
+        vx -= (boundary_threshold - (25 - map_x)) * 0.3
+
+    if map_y <= boundary_threshold:
+        vy += (boundary_threshold - map_y) * 0.3
+    elif map_y >= 15 - boundary_threshold:
+        vy -= (boundary_threshold - (15 - map_y)) * 0.3
+
+    map_center_x = 12.5  
+    map_center_y = 7.5  
+    angle_to_center = math.atan2(map_center_y - drone_y, map_center_x - drone_x)
+    desired_yaw = angle_to_center
+    yaw_error = desired_yaw - drone_yaw
+    yaw_error = (yaw_error + math.pi) % (2 * math.pi) - math.pi
+    yaw_rate = yaw_error 
+    max_yaw_rate = 0.5
+    yaw_rate = max(min(yaw_rate, max_yaw_rate), -max_yaw_rate)
+
+    return 
+
+
+
+############################################################################################################
+# A* algorithm
+# Taken from Prof. Francesco Mondada - Basics of Mobile Robotics
+############################################################################################################
+
+def aStar(start, goal, aStarMap, dontExpand = False):
+    global res_pos
+
+    aStarMap = np.where(aStarMap <= 0, 1, 0)
+    #plot the map
+
+    if not dontExpand:
+        kernel = np.array([[1, 1],
+                        [1, 1]])
+        # Use the 'same' mode to keep the output the same size as the input
+        convolved = np.convolve(aStarMap.flatten(), kernel.flatten(), mode='same')
+        # Reshape the convolved array back to the shape of the original map
+        expanded_map = np.reshape(convolved, aStarMap.shape)
+        # Any non-zero value is considered an obstacle
+        aStarMap = np.where(expanded_map > 0, 1, 0)
+
+
+    max_val = 5/res_pos
+    movements = [(1, 0, 1.0),
+                (0, 1, 1.0),
+                (-1, 0, 1.0),
+                (0, -1, 1.0)]
+
+    openSet = [start]
+    closedSet = []
+    cameFrom = dict()
+
+    x_,y_ = np.mgrid[0:max_val:1, 0:max_val:1]
+    pos = np.empty(x_.shape + (2,))
+    pos[:, :, 0] = x_; pos[:, :, 1] = y_
+    pos = np.reshape(pos, (x_.shape[0]*x_.shape[1], 2))
+    coords = list([(int(x[0]), int(x[1])) for x in pos])
+
+    gScore = dict(zip(coords, [np.inf for x in range(len(coords))]))
+    gScore[start] = 0
+
+    h = np.linalg.norm(pos - goal, axis=-1)
+    h = dict(zip(coords, h))
+
+    fScore = dict(zip(coords, [np.inf for x in range(len(coords))]))
+    fScore[start] = h[start]
+
+    while openSet != []:
+        
+        #the node in openSet having the lowest fScore[] value
+        fScore_openSet = {key:val for (key,val) in fScore.items() if key in openSet}
+        current = min(fScore_openSet, key=fScore_openSet.get)
+        del fScore_openSet
+        
+        #If the goal is reached, reconstruct and return the obtained path
+        if current == goal:
+            ##print(reconstructPath(cameFrom, current))
+            aSpath = reconstructPath(cameFrom, current)
+            aSpath = np.array([[x*res_pos, y*res_pos, height_desired, 0] for x,y in aSpath])
+
+            #if multiple points are in the same horizontal line, delete the intermediate points
+            i = 0
+            while i < len(aSpath)-2:
+                if (aSpath[i][1] == aSpath[i+1][1] and aSpath[i+1][1] == aSpath[i+2][1]) or (aSpath[i][0] == aSpath[i+1][0] and aSpath[i+1][0] == aSpath[i+2][0]):
+                    aSpath = np.delete(aSpath, i+1, 0)
+                else:
+                    i += 1
+
+            return aSpath
+
+        openSet.remove(current)
+        closedSet.append(current)
+        
+        #for each neighbor of current:
+        for dx, dy, deltacost in movements:
+            
+            neighbor = (current[0]+dx, current[1]+dy)
+            
+            # if the node is not in the map, skip
+            if (neighbor[0] >= aStarMap.shape[0]) or (neighbor[1] >= aStarMap.shape[1]) or (neighbor[0] < 0) or (neighbor[1] < 0):
+                continue
+            
+            # if the node is occupied or has already been visited, skip
+            if (aStarMap[neighbor[0], neighbor[1]]) or (neighbor in closedSet): 
+                continue
+                
+            # d(current,neighbor) is the weight of the edge from current to neighbor
+            # tentative_gScore is the distance from start to the neighbor through current
+            tentative_gScore = gScore[current] + deltacost
+            
+            if neighbor not in openSet:
+                openSet.append(neighbor)
+                
+            if tentative_gScore < gScore[neighbor]:
+                # This path to neighbor is better than any previous one. Record it!
+                cameFrom[neighbor] = current
+                gScore[neighbor] = tentative_gScore
+                fScore[neighbor] = gScore[neighbor] + h[neighbor]
+
+    # Open set is empty but goal was never reached
+    ##print("No path found to goal")
+    return np.array([False])
+
+
+############################################################################################################
+# PROVIDED FUNCTIONS  
+############################################################################################################
+
+map = np.zeros((int((max_x-min_x)/res_pos), int((max_y-min_y)/res_pos))) # 0 = unknown, 1 = free, -1 = occupied
+vistedMap = np.zeros((int((max_x-min_x)/res_pos), int((max_y-min_y)/res_pos)))
+def occupancy_map(sensor_data):
+    global map
+    pos_x = sensor_data['x_global']
+    pos_y = sensor_data['y_global']
+    yaw = sensor_data['yaw']
+    
+    for j in range(4): # 4 sensors
+        yaw_sensor = yaw + j*np.pi/2 #yaw positive is counter clockwise
+        if j == 0:
+            measurement = sensor_data['range_front']
+        elif j == 1:
+            measurement = sensor_data['range_left']
+        elif j == 2:
+            measurement = sensor_data['range_back']
+        elif j == 3:
+            measurement = sensor_data['range_right']
+        
+        for i in range(int(range_max/res_pos)): # range is 2 meters
+            dist = i*res_pos
+            idx_x = int(np.round((pos_x - min_x + dist*np.cos(yaw_sensor))/res_pos,0))
+            idx_y = int(np.round((pos_y - min_y + dist*np.sin(yaw_sensor))/res_pos,0))
+
+            # make sure the current_setpoint is within the map
+            if idx_x < 0 or idx_x >= map.shape[0] or idx_y < 0 or idx_y >= map.shape[1] or dist > range_max:
+                break
+
+            # update the map
+            if dist < measurement:
+                map[idx_x, idx_y] += conf
+            else:
+                map[idx_x, idx_y] -= conf
+                break
+    
+    map = np.clip(map, -1, 1) # certainty can never be more than 100%
+
+    return map
+
+def create_landing_path(current_position, height_desired):
+    global landing_path
+    landing_path = np.array([[current_position[0]+0.1, current_position[1], height_desired, 0],
+                        [current_position[0]+0.1, current_position[1]+0.1, height_desired, 0],
+                        [current_position[0], current_position[1]+0.1, height_desired, 0],
+                        [current_position[0]-0.1, current_position[1]+0.1, height_desired, 0],
+                        [current_position[0]-0.1, current_position[1], height_desired, 0],
+                        [current_position[0]-0.1, current_position[1]-0.1, height_desired, 0],
+                        [current_position[0], current_position[1]-0.1, height_desired, 0],
+                        [current_position[0], current_position[1], height_desired, 0]])
+    return landing_path
+
+# Control from the exercises
+current_idx = RESET
+def path_to_setpoint(path,sensor_data):
+    global on_ground, height_desired, current_idx, startpos, pathCreated
+
+    # Take off
+    if startpos is None:
+        startpos = [sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down']]    
+    if on_ground and sensor_data['range_down'] < 0.49:
+        current_setpoint = [startpos[0], startpos[1], height_desired, HALT_SPEED]
+        return current_setpoint
+    else:
+        on_ground = False
+
+
+    # Hover at the final setpoint
+    if current_idx == len(path):
+        # Uncomment for KF
+        control_command = [path[-1][0], path[-1][1], height_desired, HALT_SPEED]
+
+        current_idx = -1
+        return control_command
+
+    # Get the goal position and drone position
+    current_setpoint = path[current_idx]
+    x_drone, y_drone, z_drone, yaw_drone = sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down'], sensor_data['yaw']
+    distance_drone_to_goal = np.linalg.norm([current_setpoint[0] - x_drone, current_setpoint[1] - y_drone, current_setpoint[2] - z_drone, clip_angle(current_setpoint[3]) - clip_angle(yaw_drone)])
+
+    # When the drone reaches the goal setpoint, e.g., distance < 0.1m
+    if distance_drone_to_goal < 0.1:
+        # Select the next setpoint as the goal position
+        current_idx += 1
+        # Hover at the final setpoint
+        if current_idx == len(path):
+            current_setpoint = [HALT_SPEED, HALT_SPEED, height_desired, HALT_SPEED]
+            return current_setpoint
+    return current_setpoint
+    
+
+def clip_angle(angle):
+    angle = angle%(2*np.pi)
+    if angle > np.pi:
+        angle -= 2*np.pi
+    if angle < -np.pi:
+        angle += 2*np.pi
+    return angle
