@@ -203,21 +203,26 @@ if __name__ == '__main__':
     i = 0
     goal_idx = 0
     case = "snake_following"
-    state = "LANDING"
+    state = "INIT"
     current_position = (0, 0)
 
     x_init = 0
     x_end = 0
+    avg = 0
     delta_pad = 0
     HALT_SPEED = 0
     RESET = 0
-    height_desired = 0.3
+    height_desired = 0.2
 
     # Bool for landing pad search
+    landing_path_found = False
     starting_edge = False
+    landing_pos = False
     ending_edge = False
     kill_motor = False
     land = False
+
+    path = None
 
     list_goal = snake_creation()
     print("snake creation")
@@ -254,14 +259,14 @@ if __name__ == '__main__':
 
 ###################################################################
 
-        if le.sensor_data["stateEstimate.z"] > 0.5:
+        if le.sensor_data["stateEstimate.z"] > 0.15:
             start_search = True
 
         if start_search == True:
             height_vect.append(le.sensor_data["stateEstimate.z"]*HEIGHT_COEFF)
 
             # print(le.sensor_data["stateEstimate.z"])
-            if i > 40:
+            if i > 5:
                 height_vect.pop(0)
             else:
                 i += 1
@@ -276,13 +281,17 @@ if __name__ == '__main__':
                 diff_height_vect.pop(0)
 
             diff_sum = np.sum(diff_height_vect)
-            if diff_sum < 0 and starting_edge == False:
-                starting_edge = True
+            avg = np.mean(height_vect)
+            if diff_sum < 0 and starting_edge == False and le.sensor_data["stateEstimate.x"] >= 0.6:
+                starting_edge  = True
                 land = True
+                print("AVG : ", avg)
+                state = "LAND"
                 x_init = le.sensor_data["stateEstimate.x"]
                 print("start, X init is : ", x_init)
+                print("Diff is : ", diff_sum)
 
-            if land == True:
+            if state == "LAND" :
                 current_position = (le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"])
                 if not landing_path_found:
                     diff_valid = True
@@ -296,38 +305,49 @@ if __name__ == '__main__':
                     k = 0
                     print("landing path found, path generated : ", len(landing_path))
 
-                if diff_sum < 0:
-                    diff_valid = True
-                elif diff_sum > 0 and not diff_valid:
+                if diff_sum > 0:
                     diff_valid = False
+                elif diff_sum < 0 and not diff_valid:
+                    diff_valid = True
+                    print("DIFF < 0")
 
                 forward_speed = landing_path[k][0]-current_position[0]
                 vy = landing_path[k][1]-current_position[1]
                 vx = landing_path[k][3]-robot.yaw
-                # prev_range = le.sensor_data["stateEstimate.z"]
-                if abs(forward_speed) < 0.01 and abs(vy) < 0.01:
+                if abs(forward_speed) < 0.2 and abs(vy) < 0.2:
+                    print("IN SMTH")
                     if (k+1) % 2 != 0:
                         comp_points[int(k/2)] = 1 if diff_valid else RESET
                     k += 1
                     if k == 8:
                         k = -1
                 if k == -1:
+                    print("in adjusting landing")
                     landing_position = robot.adjust_landing(comp_points, landing_position)
                     state = "FOUND_LANDING_PAD"
+                
+                cf.commander.send_hover_setpoint(forward_speed, vy, le.sensor_data["stateEstimate.z"], 0)
 
             elif state == "FOUND_LANDING_PAD":
                 print("IN FOUND LANDING PAD")
                 current_position = (le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"])
                 forward_speed = landing_position[0]-current_position[0]
                 vy = landing_position[1]-current_position[1]
-                if abs(forward_speed) < 0.01 and abs(vy) < 0.01:
+                if abs(forward_speed) < 0.2 and abs(vy) < 0.2:
                     state = "LANDING"
+                cf.commander.send_hover_setpoint(vx, vy, le.sensor_data["stateEstimate.z"], 0)
 
             elif state == "LANDING":
-                print("LANDING")
+                if landing_pos == False:
+                    x_land_pos = le.sensor_data["stateEstimate.x"]
+                    y_land_pos = le.sensor_data["stateEstimate.y"]
+                    print("LAND POS : ", x_land_pos, " ", y_land_pos)
+                    landing_pos = True
+                #print("LANDING")
                 vx = vy = forward_speed = HALT_SPEED
-                cf.commander.send_hover_setpoint(0, 0, le.sensor_data["stateEstimate.z"]-0.2, 0)
-                if le.sensor_data["stateEstimate.z"] <= 0.12:
+                cf.commander.send_position_setpoint(x_land_pos, y_land_pos, le.sensor_data["stateEstimate.z"]-0.02, 0)
+                #cf.commander.send_hover_setpoint(0, 0, le.sensor_data["stateEstimate.z"]-0.2, 0)
+                if le.sensor_data["stateEstimate.z"] <= 0.11:
                     cf.commander.send_stop_setpoint()
                     kill_motor = True
 
@@ -366,7 +386,7 @@ if __name__ == '__main__':
         time.sleep(0.01)
 
         robot.update(le.sensor_data, 0.01)
-        if kill_motor == False:
+        if kill_motor == False and state != "LANDING":
             vx, vy, z, yaw_rate = robot.state_update()
         # vz = -(le.sensor_data["stateEstimate.z"] - z)
         # print(le.sensor_data["stateEstimate.z"])
@@ -376,8 +396,13 @@ if __name__ == '__main__':
         # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
         # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
 
-        if ending_edge == False:
-            cf.commander.send_hover_setpoint(0.3, 0, 0, z)
+        if land == False and state != "LANDING":
+            if le.sensor_data["stateEstimate.z"] < 0.10 :
+                #print(le.sensor_data["stateEstimate.z"])
+                cf.commander.send_hover_setpoint(0, 0, 0, z)
+            else:
+                #print(le.sensor_data["stateEstimate.z"])
+                cf.commander.send_hover_setpoint(0.3, 0, 0, z)
 
     cf.commander.send_stop_setpoint()
     cf.close_link()

@@ -35,7 +35,7 @@ class Agent():
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
-        self.z_target = 0.6
+        self.z_target = 0.2
 
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
@@ -52,7 +52,7 @@ class Agent():
         self.height = sensor_data['stateEstimate.z']
         self.yaw = sensor_data['stabilizer.yaw']*np.pi/180
 
-    def adjust_landing(comp_points, pad_land):
+    def adjust_landing(self, comp_points, pad_land):
         global landing_path_found, state
         adjustments = [(-0.1, 0), (0, -0.1), (0.1, 0), (0, 0.1)]
         for index, point in enumerate(comp_points):
@@ -80,7 +80,7 @@ class Agent():
 
         return control_command
 
-    def create_landing_path(current_position, height_desired):
+    def create_landing_path(self, current_position, height_desired):
         global landing_path
         landing_path = np.array([[current_position[0]+0.1, current_position[1], height_desired, 0],
                                 [current_position[0]+0.1, current_position[1]+0.1, height_desired, 0],
