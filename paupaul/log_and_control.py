@@ -230,16 +230,203 @@ def occupancy_map(sensor_data):
 
     return map
 
-        # self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=50)
-        # self._lg_stab.add_variable('stateEstimate.x', 'float')
-        # self._lg_stab.add_variable('stateEstimate.y', 'float')
-        # self._lg_stab.add_variable('stateEstimate.z', 'float')
-        # self._lg_stab.add_variable('stabilizer.yaw', 'float')
-        # self._lg_stab.add_variable('range.front')
-        # self._lg_stab.add_variable('range.back')
-        # self._lg_stab.add_variable('range.left')
-        # self._lg_stab.add_variable('range.right')
-        # self._lg_stab.add_variable('range.up')
+def snake_creation():
+    goal_list = []
+    for i in range(10, 30, +3): 
+        if i % 2 ==1:               # must be 4 to be correct 
+            for j in range(2, 28, +3):
+                goal_list.append((i,j))
+        if i % 2 == 0:
+            for j in range(29, 2, -3):
+                goal_list.append((i,j))
+    return goal_list
+
+def _get_movements_4n():
+    """
+    Get all possible 4-connectivity movements (up, down, left right).
+    :return: list of movements with cost [(dx, dy, movement_cost)]
+    """
+    return [(1, 0, 1.0),
+            (0, 1, 1.0),
+            (-1, 0, 1.0),
+            (0, -1, 1.0)]
+
+def _get_movements_8n():
+    """
+    Get all possible 8-connectivity movements. Equivalent to get_movements_in_radius(1)
+    (up, down, left, right and the 4 diagonals).
+    :return: list of movements with cost [(dx, dy, movement_cost)]
+    """
+    s2 = math.sqrt(2)
+    return [(1, 0, 1.0),
+            (0, 1, 1.0),
+            (-1, 0, 1.0),
+            (0, -1, 1.0),
+            (1, 1, s2),
+            (-1, 1, s2),
+            (-1, -1, s2),
+            (1, -1, s2)]
+
+def A_Star_function(start, goal, occupancy_grid):
+    
+    # Dimensions of the occupancy grid
+    x_dim = occupancy_grid.shape[0]  
+    y_dim = occupancy_grid.shape[1]  
+
+    # Get all the possible components of the occupancy_grid matrix
+    x,y = np.mgrid[0:x_dim:1, 0:y_dim:1]
+    pos = np.empty(x.shape + (2,))
+    pos[:, :, 0] = x
+    pos[:, :, 1] = y # superimpose x and y
+    pos = np.reshape(pos, (x.shape[0]*x.shape[1], 2))
+    coords = list([(int(x[0]), int(x[1])) for x in pos])
+
+    # Define the heuristic, here = distance to goal ignoring obstacles
+    h = np.linalg.norm(pos - goal, axis=-1)
+    # Calculate the total heuristic for each cell
+
+    h = dict(zip(coords, h))
+
+    # check errors :
+    # Check if the start and goal are within the boundaries of the map
+    for point in [start, goal]:
+        assert point[0]>=0 and point[0]<occupancy_grid.shape[0],"start or end goal not contained in the map"
+        assert point[1]>=0 and point[1]<occupancy_grid.shape[1],"start or end goal not contained in the map"
+    
+    # check if start and goal nodes correspond to free spaces
+    # if occupancy_grid[start[0], start[1]]:
+    #     print("start:", start[0], start[1])
+    #     raise Exception('Start node is not traversable')
+
+    if occupancy_grid[goal[0], goal[1]]:
+        raise Exception('Goal node is not traversable')
+    #run A* algorithm
+    path, visitedNodes = A_Star(start, goal, h, coords, occupancy_grid)
+    #print("path", path)
+
+    return path, visitedNodes
+
+def filtered_path(path, occupancy_grid):
+    if len(path) < 2:
+        return path
+
+    new_filtered_tab = [path[0]]
+    prec_dx, prec_dy = path[1][0]- path[0][0] , path[1][1] - path[0][1]
+
+    for i in range(1, len(path) - 1):
+        point = path[i]
+        next_point = path[i + 1]
+        dx, dy = next_point[0] - point[0], next_point[1] - point[1]
+
+        if is_near_obstacle(occupancy_grid, point):
+            new_filtered_tab.append(point)
+            prec_dx, prec_dy = dx, dy
+            continue
+
+        if dx != prec_dx or dy != prec_dy:
+            new_filtered_tab.append(point)
+            prec_dx, prec_dy = dx, dy
+
+    new_filtered_tab.append(path[-1])
+
+    return new_filtered_tab
+
+def grid_to_meters(path, res_pos, min_x, min_y):
+    new_path = []
+    for cell in path:
+        x = round(cell[0] * res_pos + min_x, 2)
+        y = round(cell[1] * res_pos + min_y, 2)
+        new_path.append((x, y))
+    return new_path
+
+
+# Control from the exercises
+index_current_goal_path = 0
+end_path = False
+land_on_ground = False
+end = False
+def path_to_command(path,sensor_data,dt):
+    global on_ground, height_desired, index_current_goal_path, timer, timer_done, startpos, end_path #, start_blocked
+    global try_1, try_2, look_for_landing, try_3, try_4, case, land_on_ground, home, end
+    # Start timer
+    if (index_current_goal_path == 1) & (timer is None):
+        timer = 0
+        # print("Time recording started")
+    if timer is not None:
+        timer += dt
+    # Hover at the final setpoint
+    if index_current_goal_path == len(path):
+        # Uncomment for KF
+        ##control_command = [startpos[0], startpos[1], startpos[2]-0.05, 0.0]
+        control_command = [0.0, 0.0, height_desired, 0.0]
+        if timer_done is None:
+            timer_done = True
+            # print("Path planing took " + str(np.round(timer,1)) + " [s]")
+        return control_command
+
+
+    # Get the goal position and drone position
+    current_goal = path[index_current_goal_path]
+    x_drone, y_drone, z_drone, yaw_drone = sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down'], sensor_data['yaw']
+    distance_drone_to_goal = np.linalg.norm([current_goal[0] - x_drone, current_goal[1] - y_drone])
+    dx= current_goal[0] - x_drone
+    dy= current_goal[1] - y_drone
+
+    vx, vy, r = control_law(dx, dy, yaw_drone, distance_drone_to_goal)
+    control_command = [vx, vy, height_desired, r]
+
+
+    if(look_for_landing):
+        # print("entre ")
+        if distance_drone_to_goal < 0.02:
+
+            if sensor_data['z_global'] - sensor_data['range_down'] > 0.05 :
+                control_command = [0.0, 0.0, 0.0, 0.0]
+                # print("LANDING")
+                look_for_landing = False
+                land_on_ground = True
+                #case ="stabilization_go_home"
+            else:
+                # print("change of case")
+                control_command = [0.0, 0.0, height_desired, 0.0]
+
+
+    # When the drone reaches the goal setpoint, e.g., distance < 0.1m
+    elif distance_drone_to_goal < 0.1:
+        # Select the next setpoint as the goal position 
+        index_current_goal_path += 1
+        # print("lenght path ", len(path))
+        # print("index_current_goal_path ", index_current_goal_path)
+        # Hover at the final setpoint
+        if index_current_goal_path == len(path):
+            if(home and index_current_goal_path == len(path)):
+                # print("fin path home")
+                control_command = [0.0, 0.0, 0.0, 0.0]
+                end = True 
+            control_command = [0.0, 0.0, height_desired, 0.0]
+            # print("FIN")
+            end_path = True
+            index_current_goal_path = 0
+            
+        
+
+
+            return control_command
+        
+
+    return control_command
+
+
+# self._lg_stab = LogConfig(name='Stabilizer', period_in_ms=50)
+# self._lg_stab.add_variable('stateEstimate.x', 'float')
+# self._lg_stab.add_variable('stateEstimate.y', 'float')
+# self._lg_stab.add_variable('stateEstimate.z', 'float')
+# self._lg_stab.add_variable('stabilizer.yaw', 'float')
+# self._lg_stab.add_variable('range.front')
+# self._lg_stab.add_variable('range.back')
+# self._lg_stab.add_variable('range.left')
+# self._lg_stab.add_variable('range.right')
+# self._lg_stab.add_variable('range.up')
 
 if __name__ == '__main__':
     # Initialize the low-level drivers
@@ -278,8 +465,11 @@ if __name__ == '__main__':
     i=0
     height_desired = 1.0
     sensor_data = le.sensor_data
-    while True:
+    startpos = True
+    goal_idx = 0
 
+
+    while True:
 
         if is_close(le.sensor_data["range.up"]):
             break
@@ -293,10 +483,12 @@ if __name__ == '__main__':
     
     # Take off
         if startpos is None:
-            startpos = [sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y'], sensor_data['stateEstimate.z']]    
+            startpos = [sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y'], sensor_data['stateEstimate.z']]   
+ 
         if on_ground and sensor_data['stateEstimate.z'] < 0.49:
             ### function to go up 
-            function = 1
+            print("take off")
+            cf.commander.send_hover_setpoint(0 , 0, 0, height_desired)
             continue
         else:
             on_ground = False
@@ -312,22 +504,17 @@ if __name__ == '__main__':
         occupancy_grid[:,0] = True
         occupancy_grid[:,-1] = True
 
-
         if case is None:
-            case = "stabilization"
+            case = "pass"
         # map = occupancy_map(sensor_data)
-        if(case == "stabilization"):
-            if(height_desired-sensor_data['stateEstimate.z'] < 0.05):
-                # print("stabilization done")
-                case = "pass"
-            control_command = [0.0, 0.0, height_desired, 0.0]
             
         elif(case=="pass"):
+            print("case pass")
             if(sensor_data["yaw"] > 0.9): #30 degrees
                         
                 # print("trun_right :", turn_right)
                 # print("turn_left: ", turn_left)
-                control_command = [0.0, 0.0, height_desired, 0.0]
+                cf.commander.send_hover_setpoint(0 , 0, 0, height_desired)
                 case = "pass2"
             else:
                 control_command = [0.0, 0.0, height_desired, 1]
@@ -336,17 +523,71 @@ if __name__ == '__main__':
             
                 # print("trun_right :", turn_right)
                 # print("turn_left: ", turn_left)
-                control_command = [0.0, 0.0, height_desired, 0.0]
+                cf.commander.send_hover_setpoint(0 , 0, 0, height_desired)
                 case = "snake"
+                
+        elif(case =="snake"):
+            list_goal = snake_creation()
+            case ="snake_following"
+
+        elif(case == "snake_following"):
+            # print("snake_following")
+            start = (int((sensor_data["stateEstimate.x"]-min_x)/res_pos), int((sensor_data['stateEstimate.y']-min_y)/res_pos))
+
             
+            # print("goal id :", goal_idx)
+            goal = list_goal[goal_idx]
+            while(occupancy_grid[goal[0]][goal[1]] != 0): ## add end lenght snake
+                goal_idx = goal_idx + 1
+                goal = list_goal[goal_idx]
+                # print("goal id :", goal_idx)
+            # print("current goal id :", goal_idx)    
+            if(goal_idx == len(list_goal)-1):
+                # print("FIN SNAKE")
+                cf.commander.send_hover_setpoint(0 , 0, 0, height_desired)
+            # if(occupancy_grid[start[0], start[1]] != 0):
+            #     occupancy_grid[start[0], start[1]] = 0
+            #     start_blocked = True
+
+            path, visitedNodes = A_Star_function(start, goal, occupancy_grid)
+            path_filter = filtered_path(path, occupancy_grid)
+
+            path_meters = grid_to_meters(path_filter, res_pos, min_x, min_y)
+            case = "go"
+
+        elif(case == "go"):
+            # print("go")
+            
+            for i in range(1, len(path)):
+                (a,b) = path[i]
+                if occupancy_grid[a][b] != 0:
+                    #return A*
+                    index_current_goal_path = 0
+                    case = "snake_following"
+                    # print("obstacle non detected")
+                    control_command = [0.0, 0.0, height_desired, 0.0]
 
 
 
+            if case == "go":
+                if end_path :
+                    # print("goal id + 1")
+                    goal_idx = goal_idx + 1 
+                    case = "snake_following"
+                    end_path = False
+                if sensor_data['z_global'] - sensor_data['range_down'] > 0.05 and sensor_data["x_global"]>3.5:
+                    pos_landing = [sensor_data['x_global'], sensor_data['y_global']]
+                    # print("pos_landing:", pos_landing)
+                    case = "go_ground"
+                    try_1 = True
+                    control_command= [0.0, 0.0, height_desired, 0.0]
+                else:
+                    # print("sending a command")
+                    control_command = path_to_command(path_meters,sensor_data,dt)
 
 
 
-
-
+####################################################################
         if le.sensor_data["stateEstimate.z"] > 0.5 :
             start_search = True
 
@@ -638,17 +879,6 @@ def get_command(sensor_data, camera_data, dt):
     return control_command # Ordered as array with: [v_forward_cmd, v_left_cmd, alt_cmd, yaw_rate_cmd]
 
 
-def snake_creation():
-    goal_list = []
-    for i in range(35, 50, +3): 
-        if i % 2 ==1:               # must be 4 to be correct 
-            for j in range(2, 28, +3):
-                goal_list.append((i,j))
-        if i % 2 == 0:
-            for j in range(29, 2, -3):
-                goal_list.append((i,j))
-    return goal_list
-
 def yaw_controller(yaw):
     wanted_yaw = 0.0
     Kp = 0.5
@@ -659,95 +889,7 @@ def yaw_controller(yaw):
     control_output = Kp * error #+ Ki * integral
     return control_output
 
-def grid_to_meters(path, res_pos, min_x, min_y):
-    new_path = []
-    for cell in path:
-        x = round(cell[0] * res_pos + min_x, 2)
-        y = round(cell[1] * res_pos + min_y, 2)
-        new_path.append((x, y))
-    return new_path
 
-
-
-# Control from the exercises
-index_current_goal_path = 0
-end_path = False
-land_on_ground = False
-end = False
-def path_to_command(path,sensor_data,dt):
-    global on_ground, height_desired, index_current_goal_path, timer, timer_done, startpos, end_path #, start_blocked
-    global try_1, try_2, look_for_landing, try_3, try_4, case, land_on_ground, home, end
-    # Start timer
-    if (index_current_goal_path == 1) & (timer is None):
-        timer = 0
-        # print("Time recording started")
-    if timer is not None:
-        timer += dt
-    # Hover at the final setpoint
-    if index_current_goal_path == len(path):
-        # Uncomment for KF
-        ##control_command = [startpos[0], startpos[1], startpos[2]-0.05, 0.0]
-        control_command = [0.0, 0.0, height_desired, 0.0]
-        if timer_done is None:
-            timer_done = True
-            # print("Path planing took " + str(np.round(timer,1)) + " [s]")
-        return control_command
-
-   
-    # if (start_blocked):
-    #     index_current_goal_path += 1
-    #     print("start blocked, iteration goal_path")
-
-    # Get the goal position and drone position
-    current_goal = path[index_current_goal_path]
-    x_drone, y_drone, z_drone, yaw_drone = sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down'], sensor_data['yaw']
-    distance_drone_to_goal = np.linalg.norm([current_goal[0] - x_drone, current_goal[1] - y_drone])
-    dx= current_goal[0] - x_drone
-    dy= current_goal[1] - y_drone
-
-    vx, vy, r = control_law(dx, dy, yaw_drone, distance_drone_to_goal)
-    control_command = [vx, vy, height_desired, r]
-
-
-    if(look_for_landing):
-        # print("entre ")
-        if distance_drone_to_goal < 0.02:
-
-            if sensor_data['z_global'] - sensor_data['range_down'] > 0.05 :
-                control_command = [0.0, 0.0, 0.0, 0.0]
-                # print("LANDING")
-                look_for_landing = False
-                land_on_ground = True
-                #case ="stabilization_go_home"
-            else:
-                # print("change of case")
-                control_command = [0.0, 0.0, height_desired, 0.0]
-
-
-    # When the drone reaches the goal setpoint, e.g., distance < 0.1m
-    elif distance_drone_to_goal < 0.1:
-        # Select the next setpoint as the goal position 
-        index_current_goal_path += 1
-        # print("lenght path ", len(path))
-        # print("index_current_goal_path ", index_current_goal_path)
-        # Hover at the final setpoint
-        if index_current_goal_path == len(path):
-            if(home and index_current_goal_path == len(path)):
-                # print("fin path home")
-                control_command = [0.0, 0.0, 0.0, 0.0]
-                end = True 
-            control_command = [0.0, 0.0, height_desired, 0.0]
-            # print("FIN")
-            end_path = True
-            index_current_goal_path = 0
-            
-        
-
-
-            return control_command
-        
-
-    return control_command
 
 def control_law(dx, dy, current_yaw, goal_dist):
     kp_yaw = 0.5
@@ -793,95 +935,6 @@ def clip_angle(angle):
         angle += 2*np.pi
     return angle
 
-def _get_movements_4n():
-    """
-    Get all possible 4-connectivity movements (up, down, left right).
-    :return: list of movements with cost [(dx, dy, movement_cost)]
-    """
-    return [(1, 0, 1.0),
-            (0, 1, 1.0),
-            (-1, 0, 1.0),
-            (0, -1, 1.0)]
-
-def _get_movements_8n():
-    """
-    Get all possible 8-connectivity movements. Equivalent to get_movements_in_radius(1)
-    (up, down, left, right and the 4 diagonals).
-    :return: list of movements with cost [(dx, dy, movement_cost)]
-    """
-    s2 = math.sqrt(2)
-    return [(1, 0, 1.0),
-            (0, 1, 1.0),
-            (-1, 0, 1.0),
-            (0, -1, 1.0),
-            (1, 1, s2),
-            (-1, 1, s2),
-            (-1, -1, s2),
-            (1, -1, s2)]
-
-def A_Star_function(start, goal, occupancy_grid):
-    
-    # Dimensions of the occupancy grid
-    x_dim = occupancy_grid.shape[0]  
-    y_dim = occupancy_grid.shape[1]  
-
-    # Get all the possible components of the occupancy_grid matrix
-    x,y = np.mgrid[0:x_dim:1, 0:y_dim:1]
-    pos = np.empty(x.shape + (2,))
-    pos[:, :, 0] = x
-    pos[:, :, 1] = y # superimpose x and y
-    pos = np.reshape(pos, (x.shape[0]*x.shape[1], 2))
-    coords = list([(int(x[0]), int(x[1])) for x in pos])
-
-    # Define the heuristic, here = distance to goal ignoring obstacles
-    h = np.linalg.norm(pos - goal, axis=-1)
-    # Calculate the total heuristic for each cell
-
-    h = dict(zip(coords, h))
-
-    # check errors :
-    # Check if the start and goal are within the boundaries of the map
-    for point in [start, goal]:
-        assert point[0]>=0 and point[0]<occupancy_grid.shape[0],"start or end goal not contained in the map"
-        assert point[1]>=0 and point[1]<occupancy_grid.shape[1],"start or end goal not contained in the map"
-    
-    # check if start and goal nodes correspond to free spaces
-    # if occupancy_grid[start[0], start[1]]:
-    #     print("start:", start[0], start[1])
-    #     raise Exception('Start node is not traversable')
-
-    if occupancy_grid[goal[0], goal[1]]:
-        raise Exception('Goal node is not traversable')
-    #run A* algorithm
-    path, visitedNodes = A_Star(start, goal, h, coords, occupancy_grid)
-    #print("path", path)
-
-    return path, visitedNodes
-
-def filtered_path(path, occupancy_grid):
-    if len(path) < 2:
-        return path
-
-    new_filtered_tab = [path[0]]
-    prec_dx, prec_dy = path[1][0]- path[0][0] , path[1][1] - path[0][1]
-
-    for i in range(1, len(path) - 1):
-        point = path[i]
-        next_point = path[i + 1]
-        dx, dy = next_point[0] - point[0], next_point[1] - point[1]
-
-        if is_near_obstacle(occupancy_grid, point):
-            new_filtered_tab.append(point)
-            prec_dx, prec_dy = dx, dy
-            continue
-
-        if dx != prec_dx or dy != prec_dy:
-            new_filtered_tab.append(point)
-            prec_dx, prec_dy = dx, dy
-
-    new_filtered_tab.append(path[-1])
-
-    return new_filtered_tab
 
 def is_near_obstacle(occupancy_grid, point):
     x, y = point
