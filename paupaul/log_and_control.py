@@ -39,8 +39,6 @@ from cflib.utils.multiranger import Multiranger
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
-starting_edge = False
-ending_edge = False
 start_search = False
 # Only output errors from the logging framework
 logging.basicConfig(level=logging.ERROR)
@@ -153,7 +151,24 @@ from agent import Agent
 import numpy as np
 from simple_pid import PID
 
+
+
+def snake_creation():
+    goal_list = []
+    for i in range(10, 30, +3): 
+        if i % 2 ==1:               # must be 4 to be correct 
+            for j in range(2, 28, +3):
+                goal_list.append((i,j))
+        if i % 2 == 0:
+            for j in range(29, 2, -3):
+                goal_list.append((i,j))
+    return goal_list
+
+
 if __name__ == '__main__':
+
+
+
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
     crf = Crazyflie(rw_cache='./cache')
@@ -188,6 +203,21 @@ if __name__ == '__main__':
     height_vect = []
     diff_height_vect = []
     i=0
+    goal_idx = 0
+    case = "snake_following"
+
+    x_init = 0
+    x_end = 0
+    delta_pad = 0 
+
+    # Bool for landing pad search
+    starting_edge = False
+    ending_edge = False
+    kill_motor = False
+     
+
+    list_goal = snake_creation()
+    print("snake creation")
 
     while robot.alive:
 
@@ -197,11 +227,33 @@ if __name__ == '__main__':
         # print(le.sensor_data["range.left"])
         # print(le.sensor_data["range.right"])
         # print(le.sensor_data["range.front"])
-        # print(le.sensor_data["range.back"])  
+        # print(le.sensor_data["range.back"]) 
+#########################################################################
+        # if case is None:
+        #     case = "snake_following"
+
+        # elif(case == "snake_following"):
+        #     print("snake_folowing")
+
+        #     start = (int((le.sensor_data["x_global"]-min_x)/res_pos), int((le.sensor_data["y_global"]-min_y)/res_pos))
+        #      # print("map start", occupancy_grid[start[0], start[1]])
+
+        #     # print("goal id :", goal_idx)
+        #     goal = list_goal[goal_idx]
+        #     ## go to
+        #     case = "go"
+            
+        # elif(case == "go"):
+        #     print("go")
+            
+        #     goal_idx += 1
+
+        
+###################################################################
 
         if le.sensor_data["stateEstimate.z"] > 0.5 :
             start_search = True
-
+            
         if start_search == True:
             height_vect.append(le.sensor_data["stateEstimate.z"]*HEIGHT_COEFF) 
 
@@ -222,23 +274,40 @@ if __name__ == '__main__':
                 diff_height_vect.pop(0)
 
             diff_sum = np.sum(diff_height_vect)
-            if diff_sum < 0 :
-                print("start")
-                if i > 30:
-                    starting_edge = True
-            if starting_edge == True:
+            if diff_sum < 0 and starting_edge==False:
+                starting_edge = True
+                x_init = le.sensor_data["stateEstimate.x"]
+                print("start, X init is : ", x_init)
+
+            if starting_edge == True and ending_edge == False and le.sensor_data["stateEstimate.x"] > 1:
                 if diff_sum > 0:
                     ending_edge = True
                     print("end")
+                    x_end = le.sensor_data["stateEstimate.x"]
+                    delta_pad = x_init-x_end 
+                    x_landing_center = le.sensor_data["stateEstimate.x"] + delta_pad
+                    print("delta pad", delta_pad)
+                    print("Position in X is : ", le.sensor_data["stateEstimate.x"])
+                    print("Position in X should be : ", x_landing_center)
+                    
 
+            if ending_edge == True :
+                if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor == True:
+                   kill_motor = True
+                   cf.commander.send_stop_setpoint()
+                   print("kill")
+                if kill_motor == False: 
+                    cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"] - 0.1, 0)
+                    print("z: ", le.sensor_data["stateEstimate.z"])
 
         # print(le.sensor_data["v.z"]) 
 
         time.sleep(0.01)
 
         robot.update(le.sensor_data, 0.01)
-        vx, vy, z, yaw_rate = robot.state_update()
-        # vz = -*(le.sensor_data["stateEstimate.z"] - z)
+        if kill_motor == False:
+            vx, vy, z, yaw_rate = robot.state_update()
+        # vz = -(le.sensor_data["stateEstimate.z"] - z)
         # print(le.sensor_data["stateEstimate.z"])
         # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
         # print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
@@ -246,7 +315,10 @@ if __name__ == '__main__':
         # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
         # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
 
-        cf.commander.send_hover_setpoint(0.3 , 0, 0, z)
+        if ending_edge == False : 
+            cf.commander.send_hover_setpoint(0.3 , 0, 0, z)
+      
+        
         
 
     cf.commander.send_stop_setpoint()
