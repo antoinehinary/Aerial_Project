@@ -207,13 +207,18 @@ if __name__ == '__main__':
     current_position = (0, 0)
 
     x_init = 0
+    y_init = 0
     x_end = 0
+    y_end = 0
     avg = 0
-    delta_pad = 0
+    delta_pad_x = 0
+    delta_pad_y = 0
     HALT_SPEED = 0
     RESET = 0
     height_desired = 0.2
     x_landing_center = 0
+    y_landing_center = 0
+    landing_pad_mid_length = 0.05
 
     # Bool for landing pad search
     landing_path_found = False
@@ -224,6 +229,7 @@ if __name__ == '__main__':
     land = False
     landing_ok = False
 
+    state = "INIT"
 
 
     path = None
@@ -296,36 +302,59 @@ if __name__ == '__main__':
             if (diff_sum < 0 or avg_height < 15) and not starting_edge and landing_ok:
                 starting_edge = True
                 land = True
-                state = "LAND"
+                state = "END_EDGE_SEARCH"
                 x_init = le.sensor_data["stateEstimate.x"]
                 print(f"AVG: {avg_height}, start, X init: {x_init}, Diff: {diff_sum}")
 
             # Detect ending edge
-            if starting_edge and not ending_edge and landing_ok:
+            if state == "END_EDGE_SEARCH" and not ending_edge and landing_ok:
                 if diff_sum > 0:
                     ending_edge = True
                     x_end = le.sensor_data["stateEstimate.x"]
-                    delta_pad = x_end - x_init
-                    x_landing_center = le.sensor_data["stateEstimate.x"] - delta_pad
-                    print(f"End, delta pad: {delta_pad}, Position X: {le.sensor_data['stateEstimate.x']}, Should be: {x_landing_center}")
+                    delta_pad_x = x_end - x_init
+                    x_landing_center = le.sensor_data["stateEstimate.x"] - delta_pad_x
+                    state = "CENTERING_X_LANDING"
+                    print(f"End, delta pad: {delta_pad_x}, Position X: {le.sensor_data['stateEstimate.x']}, Should be: {x_landing_center}")
+
+            # Detect ending edge for the 2nd axis
+            if state == "CENTERING_Y_LANDING":
+                if avg_height > 15:
+                    state == "CENTER_DRONE"
+                    y_end = le.sensor_data["stateEstimate.y"]
+                    delta_pad_y = y_end - y_init
+                    y_landing_center = y_init - (landing_pad_mid_length - delta_pad_y)
+                    cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
+                cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"]+0.02, le.sensor_data["stateEstimate.z"], 0)
 
             # Perform landing
-            if ending_edge:
+            if state == "CENTERING_X_LANDING":
                 if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor:
                     kill_motor = True
                     cf.commander.send_stop_setpoint()
                     if not kill_motor:
                         print("kill")
                 else:
+                    cf.commander.send_position_setpoint( x_landing_center, 
+                        le.sensor_data["stateEstimate.y"], 
+                        le.sensor_data["stateEstimate.z"],
+                        0
+                    )
                     if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.04:
-                        cf.commander.send_position_setpoint(
-                            x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"] - 0.1, 0
-                        )
-                    else:
-                        cf.commander.send_position_setpoint(
-                            x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0
-                        )
+                        y_init = le.sensor_data["stateEstimate.y"]
+                        state == "CENTERING_Y_LANDING"
+                        cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
+
+            if state == "CENTER_DRONE":
+                cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"], 0)
+                if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.04 and abs(y_landing_center-le.sensor_data["stateEstimate.y"]) < 0.04:
+                    state == "LAND"
+
+            if state == "LAND":
+                cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.02, 0)
+                if le.sensor_data["stateEstimate.x"] < 0.14:
+                    cf.commander.send_stop_setpoint()
                 print(f"z: {le.sensor_data['stateEstimate.z']}")
+
 
         # print(le.sensor_data["v.z"])
 
