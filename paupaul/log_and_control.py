@@ -203,21 +203,20 @@ if __name__ == '__main__':
     i = 0
     goal_idx = 0
     case = "snake_following"
-    state = "INIT"
     current_position = (0, 0)
 
-    x_init = 0
-    y_init = 0
-    x_end = 0
-    y_end = 0
-    avg = 0
-    delta_pad_x = 0
-    delta_pad_y = 0
+    x_init = 0.0
+    y_init = 0.0
+    x_end = 0.0
+    y_end = 0.0
+    avg = 0.0
+    delta_pad_x = 0.0
+    delta_pad_y = 0.0
     HALT_SPEED = 0
     RESET = 0
     height_desired = 0.2
-    x_landing_center = 0
-    y_landing_center = 0
+    x_landing_center = 0.0
+    y_landing_center = 0.0
     landing_pad_mid_length = 0.05
 
     # Bool for landing pad search
@@ -227,10 +226,7 @@ if __name__ == '__main__':
     ending_edge = False
     kill_motor = False
     land = False
-    landing_ok = False
-
     state = "INIT"
-
 
     path = None
 
@@ -286,72 +282,92 @@ if __name__ == '__main__':
             diff_height_vect.append(height_diff)
 
             # Manage difference vector size
-            if i > 30:
-                diff_height_vect.pop(0)
+            # if i > 30:
+            #     diff_height_vect.pop(0)
 
-            # Calculate sum of height differences and average height
-            diff_sum = np.sum(diff_height_vect)
-            for l in range(8):
-                if l < 4:
-                    height_vect[l] = 0.3*height_vect[l]
-                else:
-                    height_vect[l] = 0.7*height_vect[l]
+            # # Calculate sum of height differences and average height
+            # diff_sum = np.sum(diff_height_vect)
+            if i > 8:
+                for l in range(8):
+                    if l < 4:
+                        height_vect[l] = 0.3*height_vect[l]
+                    else:
+                        height_vect[l] = 0.7*height_vect[l]
+
             avg_height = np.mean(height_vect)
 
             # Detect starting edge
-            if (diff_sum < 0 or avg_height < 15) and not starting_edge and landing_ok:
+            #diff_sum < 0 or 
+            if (avg_height > 12) and not starting_edge and le.sensor_data["stateEstimate.x"] > 1:
                 starting_edge = True
                 land = True
                 state = "END_EDGE_SEARCH"
                 x_init = le.sensor_data["stateEstimate.x"]
-                print(f"AVG: {avg_height}, start, X init: {x_init}, Diff: {diff_sum}")
+                x_landing_center = x_init+0.05
+                cf.commander.send_hover_setpoint(0, 0, 0, le.sensor_data["stateEstimate.z"])
+
+                print(f"AVG: {avg_height}, start, X init: {x_init}")
 
             # Detect ending edge
-            if state == "END_EDGE_SEARCH" and not ending_edge and landing_ok:
-                if diff_sum > 0:
-                    ending_edge = True
-                    x_end = le.sensor_data["stateEstimate.x"]
-                    delta_pad_x = x_end - x_init
-                    x_landing_center = le.sensor_data["stateEstimate.x"] - delta_pad_x
-                    state = "CENTERING_X_LANDING"
-                    print(f"End, delta pad: {delta_pad_x}, Position X: {le.sensor_data['stateEstimate.x']}, Should be: {x_landing_center}")
+            elif state == "END_EDGE_SEARCH" and le.sensor_data["stateEstimate.x"] > 1:
+                print("END_EDGE_SEARCH")
+                # print(f"AVG: {avg_height}, Diff: {diff_sum}")
+                # if avg_height > 14:
+                #     ending_edge = True
+                #     x_end = le.sensor_data["stateEstimate.x"]
+                #     delta_pad_x = x_end - x_init
+                #     x_landing_center = x_end - landing_pad_mid_length
+                #     state = "CENTERING_X_LANDING"
+                #     print(f"End, delta pad: {delta_pad_x}, Position X: {le.sensor_data['stateEstimate.x']}, Should be: {x_landing_center}")
+                #     cf.commander.send_hover_setpoint( 0.0, 0, 0, le.sensor_data["stateEstimate.z"])
+                if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.008:
+                    state = "CENTERING_Y_LANDING"
+                    cf.commander.send_hover_setpoint( 0.0, 0, 0, le.sensor_data["stateEstimate.z"])
+                else :
+                    cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
 
             # Detect ending edge for the 2nd axis
-            if state == "CENTERING_Y_LANDING":
-                if avg_height > 15:
-                    state == "CENTER_DRONE"
+            elif state == "CENTERING_Y_LANDING":
+                print("entering_y_landing")
+                if avg_height > 14:
+                    state = "CENTER_DRONE"
                     y_end = le.sensor_data["stateEstimate.y"]
-                    delta_pad_y = y_end - y_init
-                    y_landing_center = y_init - (landing_pad_mid_length - delta_pad_y)
-                    cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
+                    y_landing_center = y_end - landing_pad_mid_length
+                    print(f"CENTER_DRONE, position delta is {y_landing_center}, ending point is : {y_end} ")
+                    cf.commander.send_hover_setpoint( 0.0, 0, 0, le.sensor_data["stateEstimate.z"])
                 cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"]+0.02, le.sensor_data["stateEstimate.z"], 0)
 
             # Perform landing
-            if state == "CENTERING_X_LANDING":
-                if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor:
-                    kill_motor = True
-                    cf.commander.send_stop_setpoint()
-                    if not kill_motor:
-                        print("kill")
-                else:
-                    cf.commander.send_position_setpoint( x_landing_center, 
-                        le.sensor_data["stateEstimate.y"], 
-                        le.sensor_data["stateEstimate.z"],
-                        0
-                    )
-                    if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.04:
-                        y_init = le.sensor_data["stateEstimate.y"]
-                        state == "CENTERING_Y_LANDING"
-                        cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
+            # elif state == "CENTERING_X_LANDING":
+                
+            #     print("FIIIIIIIIIIIIIIIIIIIIIIIIIIIN")
+            #     # if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor:
+            #     #     kill_motor = True
+            #     #     cf.commander.send_stop_setpoint()
+            #     #     if not kill_motor:
+            #     #         print("kill")
+            #     # else:
+            #     cf.commander.send_position_setpoint( le.sensor_data["stateEstimate.x"]-0.02, 
+            #         le.sensor_data["stateEstimate.y"], 
+            #         le.sensor_data["stateEstimate.z"]-0.02,
+            #         0
+            #     )
+            #     if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.01:
+            #         print("CENTERING_Y_LANDING")
+            #         y_init = le.sensor_data["stateEstimate.y"]
+            #         state = "CENTERING_Y_LANDING"
+            #         cf.commander.send_position_setpoint(le.sensor_data["stateEstimate.x"]-0.01, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"]-0.01, 0)
 
-            if state == "CENTER_DRONE":
-                cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"], 0)
-                if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.04 and abs(y_landing_center-le.sensor_data["stateEstimate.y"]) < 0.04:
-                    state == "LAND"
+            elif state == "CENTER_DRONE":
+                print(f"Position desired is {x_landing_center} and : {y_landing_center} ")        
+                print(f"Position actual is {le.sensor_data["stateEstimate.x"]} and : {le.sensor_data["stateEstimate.y"]} ")                     
+                cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.006, 0)
+                if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.01 and abs(y_landing_center-le.sensor_data["stateEstimate.y"]) < 0.01:
+                    state = "LAND"
 
-            if state == "LAND":
+            elif state == "LAND":
                 cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.02, 0)
-                if le.sensor_data["stateEstimate.x"] < 0.14:
+                if le.sensor_data["stateEstimate.z"] < 0.14:
                     cf.commander.send_stop_setpoint()
                 print(f"z: {le.sensor_data['stateEstimate.z']}")
 
@@ -361,7 +377,7 @@ if __name__ == '__main__':
         time.sleep(0.01)
 
         robot.update(le.sensor_data, 0.01)
-        if kill_motor == False and state != "LANDING":
+        if kill_motor == False and not land:
             vx, vy, z, yaw_rate = robot.state_update()
         # vz = -(le.sensor_data["stateEstimate.z"] - z)
         # print(le.sensor_data["stateEstimate.z"])
@@ -373,9 +389,11 @@ if __name__ == '__main__':
 
         if land == False:
             if le.sensor_data["stateEstimate.z"] < 0.10 :
+                # print(f"STATE IS : {le.sensor_data["stateEstimate.x"]}, {le.sensor_data["stateEstimate.y"]}")
                 #print(le.sensor_data["stateEstimate.z"])
                 cf.commander.send_hover_setpoint(0, 0, 0, z)
             else:
+                # print(f"STATE dans laire : {le.sensor_data["stateEstimate.x"]}, {le.sensor_data["stateEstimate.y"]}")
                 #print(le.sensor_data["stateEstimate.z"])
                 cf.commander.send_hover_setpoint(0.3, 0, 0, z)
 
