@@ -1,5 +1,6 @@
 ## AGENT
 import numpy as np
+from scipy.optimize import minimize
 
 # STATES
 ARISE = 0
@@ -19,6 +20,24 @@ def rotmat(theta):
     m = np.array([[np.cos(theta), -np.sin(theta)],
                   [np.sin(theta), np.cos(theta)]])
     return m
+
+def find_landing_pos(edges):
+    
+    def objective(x, points):
+        
+        distance = np.empty((len(points),))
+        for i, p in enumerate(points):
+            dp = p - x
+            distance[i] = np.linalg.norm(dp*(1-0.15/np.linalg.norm(dp)))
+        
+        return np.sum(distance)
+    
+    # Initial guess for the point x
+    x0 = np.array([0, 0])
+    # Minimize the objective function
+    result = minimize(objective, x0, args=(edges,))
+    
+    return result.x
 
 class Agent():
     
