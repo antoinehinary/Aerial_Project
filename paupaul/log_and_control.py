@@ -94,6 +94,8 @@ class LoggingExample:
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
         self._lg_stab.add_variable('range.up')
+        self._lg_stab.add_variable('stateEstimate.az', 'float')
+        
 
         # The fetch-as argument can be set to FP16 to save space in the log packet
         # self._lg_stab.add_variable('pm.vbat', 'FP16')
@@ -149,25 +151,9 @@ class LoggingExample:
 
 from agent import Agent
 import numpy as np
-from simple_pid import PID
-
-
-
-def snake_creation():
-    goal_list = []
-    for i in range(10, 30, +3): 
-        if i % 2 ==1:               # must be 4 to be correct 
-            for j in range(2, 28, +3):
-                goal_list.append((i,j))
-        if i % 2 == 0:
-            for j in range(29, 2, -3):
-                goal_list.append((i,j))
-    return goal_list
-
+import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-
-
 
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
@@ -181,146 +167,27 @@ if __name__ == '__main__':
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
 
-    # cf.commander.send_hover_setpoint(0, 0, 0, 0.6)
-    # time.sleep(1)
-
     robot = Agent(le.sensor_data, 0.1)
     robot.update(le.sensor_data, 0.1)
-
-    crf = Crazyflie(rw_cache='./cache')
     
-    # z_pid = PID(2.5, 0.0, 1.0, proportional_on_measurement=True)
-    # def send_velocity_world_setpoint(self, vx, vy, vz, yawrate):
-    #     """
-    #     Send Velocity in the world frame of reference setpoint with yawrate commands
-
-    #     vx, vy, vz are in m/s
-    #     yawrate is in degrees/s
-    
-    # The Crazyflie lib doesn't contain anything to keep the application alive,
-    # so this is where your application should do something. In our case we 
-    # are just waiting until we are disconnected.
-    height_vect = []
-    diff_height_vect = []
-    i=0
-    goal_idx = 0
-    case = "snake_following"
-
-    x_init = 0
-    x_end = 0
-    delta_pad = 0 
-
-    # Bool for landing pad search
-    starting_edge = False
-    ending_edge = False
-    kill_motor = False
-     
-
-    list_goal = snake_creation()
-    print("snake creation")
+    z_acc = []
 
     while robot.alive:
 
-        if is_close(le.sensor_data["range.up"]):
+        if is_close(le.sensor_data['range.up']):
             break
 
-        # print(le.sensor_data["range.left"])
-        # print(le.sensor_data["range.right"])
-        # print(le.sensor_data["range.front"])
-        # print(le.sensor_data["range.back"]) 
-#########################################################################
-        # if case is None:
-        #     case = "snake_following"
-
-        # elif(case == "snake_following"):
-        #     print("snake_folowing")
-
-        #     start = (int((le.sensor_data["x_global"]-min_x)/res_pos), int((le.sensor_data["y_global"]-min_y)/res_pos))
-        #      # print("map start", occupancy_grid[start[0], start[1]])
-
-        #     # print("goal id :", goal_idx)
-        #     goal = list_goal[goal_idx]
-        #     ## go to
-        #     case = "go"
-            
-        # elif(case == "go"):
-        #     print("go")
-            
-        #     goal_idx += 1
-
-        
-###################################################################
-
-        if le.sensor_data["stateEstimate.z"] > 0.5 :
-            start_search = True
-            
-        if start_search == True:
-            height_vect.append(le.sensor_data["stateEstimate.z"]*HEIGHT_COEFF) 
-
-            #print(le.sensor_data["stateEstimate.z"])
-            if i > 40:
-                height_vect.pop(0)
-            else :
-                i += 1
-            #print("vect : ", vect)
-
-            height_diff = height_vect[i-1] - height_vect[0]
-            #print("height: ", height_diff)
-
-
-            diff_height_vect.append(height_diff)
-
-            if i > 30:
-                diff_height_vect.pop(0)
-
-            diff_sum = np.sum(diff_height_vect)
-            if diff_sum < 0 and starting_edge==False:
-                starting_edge = True
-                x_init = le.sensor_data["stateEstimate.x"]
-                print("start, X init is : ", x_init)
-
-            if starting_edge == True and ending_edge == False and le.sensor_data["stateEstimate.x"] > 1:
-                if diff_sum > 0:
-                    ending_edge = True
-                    print("end")
-                    x_end = le.sensor_data["stateEstimate.x"]
-                    delta_pad = x_init-x_end 
-                    x_landing_center = le.sensor_data["stateEstimate.x"] + delta_pad
-                    print("delta pad", delta_pad)
-                    print("Position in X is : ", le.sensor_data["stateEstimate.x"])
-                    print("Position in X should be : ", x_landing_center)
-                    
-
-            if ending_edge == True :
-                if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor == True:
-                   kill_motor = True
-                   cf.commander.send_stop_setpoint()
-                   print("kill")
-                if kill_motor == False: 
-                    cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"] - 0.1, 0)
-                    print("z: ", le.sensor_data["stateEstimate.z"])
-
-        # print(le.sensor_data["v.z"]) 
-
-        time.sleep(0.01)
-
         robot.update(le.sensor_data, 0.01)
-        if kill_motor == False:
-            vx, vy, z, yaw_rate = robot.state_update()
-        # vz = -(le.sensor_data["stateEstimate.z"] - z)
-        # print(le.sensor_data["stateEstimate.z"])
-        # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
-        # print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
-        # print("command", [vx, vy, z, yaw_rate])
-        # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
-        # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
-
-        if ending_edge == False : 
-            cf.commander.send_hover_setpoint(0.3 , 0, 0, z)
-      
         
+        z_acc.append(le.sensor_data['stateEstimate.az'])
         
+        time.sleep(0.01)
 
     cf.commander.send_stop_setpoint()
     cf.close_link()
     
+    if True:
+        ## plotting
+        z_acc = np.asarray(z_acc)
+        plt.plot(z_acc, marker="o", color="k")
+        plt.show()

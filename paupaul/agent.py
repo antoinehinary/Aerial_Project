@@ -41,11 +41,6 @@ def find_landing_pos(edges):
 
 class Agent():
     
-    # self._lg_stab.add_variable('stateEstimate.x', 'float')
-    # self._lg_stab.add_variable('stateEstimate.y', 'float')
-    # self._lg_stab.add_variable('stateEstimate.z', 'float')
-    # self._lg_stab.add_variable('stabilizer.yaw', 'float')
-    
     def __init__(self, sensor_data, dt):
         self.alive = True
         self.state = ARISE
@@ -55,7 +50,11 @@ class Agent():
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
-        self.prev_force = np.zeros((2,))
+        
+        self.goal = np.array([4, 0]) # to replace
+        
+        self.edges = []
+        
        
     def update(self, sensor_data, dt):
         
@@ -110,19 +109,45 @@ class Agent():
                 self.next_state = FIND_STARTING
             return self.state_update()
         
-    # def send_velocity_world_setpoint(self, vx, vy, vz, yawrate):
-    #     """
-    #     Send Velocity in the world frame of reference setpoint with yawrate commands
-
-    #     vx, vy, vz are in m/s
-    #     yawrate is in degrees/s
-
+    def find_landing(self, verbose=True):
         
-    def find_landing(self):
-        
-        # self.goal = self.starting_pos + np.array([4,0])
-        self.goal = np.array([4, 0])
+        match len(self.edges):
+            case 0:
+                if self.sensor_data['stateEstimate.az'] > 1:
+                    self.edges.append(self.pos)
+                    ## continue in the same direction
+                    dp = self.goal-self.pos
+                    dp /= np.linalg.norm(dp)
+                    self.goal = self.pos + 1.7*0.3*dp
+                    
+                    if verbose: print("First edge detected")
+            case 1:
+                if self.sensor_data['stateEstimate.az'] < -1:
+                    self.edges.append(self.pos)
+                    self.goal = np.mean(self.edges, axis=0)
+                    
+                    if verbose: print("Second edge detected")
 
+                elif np.linalg.norm(self.pos - self.goal) < 0.02:
+                    de = self.edges[1]-self.edges[0]
+                    de /= np.linalg.norm(de)
+                    self.goal = self.pos + 1.5*0.3*np.array(-de[1], de[0])
+                    
+            case 2:
+                if np.linalg.norm(self.pos - self.goal) < 0.02:
+                    self.alive = False
+                    control_command = [0, 0, 0.6, 0] # last command
+                    
+                    if verbose: print("Arrived at pseudo-center")
+                    
+                    return control_command
+                
+                if self.sensor_data['stateEstimate.az'] < -1:
+                    self.edges.append(self.pos)
+                    self.goal = find_landing_pos(self.edges)
+                    
+                    if verbose: print("Third edge detected")
+                 
         control_command = self.go_to()
         return control_command
     
@@ -134,27 +159,15 @@ class Agent():
         force = 0.4*dp/d
         repulsion_force = self.repulsion_force(self.pos)
         
-        # repulsion_force_prime = self.repulsion_force(self.pos+self.speed*self.dt)   
-        # df = (repulsion_force_prime-repulsion_force)/self.dt
-
-        # print("distances:", [np.linalg.norm(x-self.pos) for x in self.obst])
-        # print(force, repulsion_force)
-        
         force += repulsion_force
-        
-        # print("repulsion force", repulsion_force)
-        # force -= df
-        
-        # v_des = self.force_filter(force)
+
         d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
         v_des = force * np.clip(d_min/0.3, 0, 1)
         v = rotmat(-self.yaw) @ v_des
         
         z = self.z_target
-        # yaw = np.clip(self.height, a_min=0, a_max=0.5)
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
-                       # roll/pitch/yaw_Rate/thrust
  
         return control_command
         
@@ -174,13 +187,3 @@ class Agent():
             f -= force * (do/d)
             
         return f
-    
-    # def force_filter(self, force):
-    #     tau = 0.25
-    #     filtered_force = np.copy(force)
-    #     filter = 1/tau * np.ones_like(force)/( np.ones_like(force) - self.prev_force * np.exp(-self.dt*tau) )
-        
-        
-    #     filtered_force *= filter
-    #     self.prev_force = force + filtered_force
-    #     return force + filtered_force
