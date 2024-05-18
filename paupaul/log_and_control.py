@@ -213,6 +213,7 @@ if __name__ == '__main__':
     HALT_SPEED = 0
     RESET = 0
     height_desired = 0.2
+    x_landing_center = 0
 
     # Bool for landing pad search
     landing_path_found = False
@@ -221,6 +222,9 @@ if __name__ == '__main__':
     ending_edge = False
     kill_motor = False
     land = False
+    landing_ok = False
+
+
 
     path = None
 
@@ -263,123 +267,65 @@ if __name__ == '__main__':
             start_search = True
 
         if start_search == True:
-            height_vect.append(le.sensor_data["stateEstimate.z"]*HEIGHT_COEFF)
+            height_vect.append(le.sensor_data["stateEstimate.z"] * HEIGHT_COEFF)
 
-            # print(le.sensor_data["stateEstimate.z"])
-            if i > 5:
+            # Manage height vector size
+            if i > 8:
                 height_vect.pop(0)
             else:
                 i += 1
-            # print("vect : ", vect)
 
-            height_diff = height_vect[i-1] - height_vect[0]
-            # print("height: ", height_diff)
-
+            # Calculate height difference
+            height_diff = height_vect[-1] - height_vect[0]
             diff_height_vect.append(height_diff)
 
+            # Manage difference vector size
             if i > 30:
                 diff_height_vect.pop(0)
 
+            # Calculate sum of height differences and average height
             diff_sum = np.sum(diff_height_vect)
-            avg = np.mean(height_vect)
-            if diff_sum < 0 and starting_edge == False and le.sensor_data["stateEstimate.x"] >= 0.6:
-                starting_edge  = True
+            for l in range(8):
+                if l < 4:
+                    height_vect[l] = 0.3*height_vect[l]
+                else:
+                    height_vect[l] = 0.7*height_vect[l]
+            avg_height = np.mean(height_vect)
+
+            # Detect starting edge
+            if (diff_sum < 0 or avg_height < 15) and not starting_edge and landing_ok:
+                starting_edge = True
                 land = True
-                print("AVG : ", avg)
                 state = "LAND"
                 x_init = le.sensor_data["stateEstimate.x"]
-                print("start, X init is : ", x_init)
-                print("Diff is : ", diff_sum)
+                print(f"AVG: {avg_height}, start, X init: {x_init}, Diff: {diff_sum}")
 
-            if state == "LAND" :
-                current_position = (le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"])
-                if not landing_path_found:
-                    diff_valid = True
-                    # prev_range = le.sensor_data["stateEstimate.z"]
-                    vx = vy = forward_speed = HALT_SPEED
-                    landing_path_found = True
-                    comp_points = np.zeros(4)
-                    landing_position = current_position
-                    landing_path = robot.create_landing_path(current_position, height_desired)
-                    path = landing_path
-                    k = 0
-                    print("landing path found, path generated : ", len(landing_path))
-
+            # Detect ending edge
+            if starting_edge and not ending_edge and landing_ok:
                 if diff_sum > 0:
-                    diff_valid = False
-                elif diff_sum < 0 and not diff_valid:
-                    diff_valid = True
-                    print("DIFF < 0")
+                    ending_edge = True
+                    x_end = le.sensor_data["stateEstimate.x"]
+                    delta_pad = x_end - x_init
+                    x_landing_center = le.sensor_data["stateEstimate.x"] - delta_pad
+                    print(f"End, delta pad: {delta_pad}, Position X: {le.sensor_data['stateEstimate.x']}, Should be: {x_landing_center}")
 
-                forward_speed = landing_path[k][0]-current_position[0]
-                vy = landing_path[k][1]-current_position[1]
-                vx = landing_path[k][3]-robot.yaw
-                if abs(forward_speed) < 0.2 and abs(vy) < 0.2:
-                    print("IN SMTH")
-                    if (k+1) % 2 != 0:
-                        comp_points[int(k/2)] = 1 if diff_valid else RESET
-                    k += 1
-                    if k == 8:
-                        k = -1
-                if k == -1:
-                    print("in adjusting landing")
-                    landing_position = robot.adjust_landing(comp_points, landing_position)
-                    state = "FOUND_LANDING_PAD"
-                
-                cf.commander.send_hover_setpoint(forward_speed, vy, le.sensor_data["stateEstimate.z"], 0)
-
-            elif state == "FOUND_LANDING_PAD":
-                print("IN FOUND LANDING PAD")
-                current_position = (le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"])
-                forward_speed = landing_position[0]-current_position[0]
-                vy = landing_position[1]-current_position[1]
-                if abs(forward_speed) < 0.2 and abs(vy) < 0.2:
-                    state = "LANDING"
-                cf.commander.send_hover_setpoint(vx, vy, le.sensor_data["stateEstimate.z"], 0)
-
-            elif state == "LANDING":
-                if landing_pos == False:
-                    x_land_pos = le.sensor_data["stateEstimate.x"]
-                    y_land_pos = le.sensor_data["stateEstimate.y"]
-                    print("LAND POS : ", x_land_pos, " ", y_land_pos)
-                    landing_pos = True
-                #print("LANDING")
-                vx = vy = forward_speed = HALT_SPEED
-                cf.commander.send_position_setpoint(x_land_pos, y_land_pos, le.sensor_data["stateEstimate.z"]-0.02, 0)
-                #cf.commander.send_hover_setpoint(0, 0, le.sensor_data["stateEstimate.z"]-0.2, 0)
-                if le.sensor_data["stateEstimate.z"] <= 0.11:
-                    cf.commander.send_stop_setpoint()
+            # Perform landing
+            if ending_edge:
+                if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor:
                     kill_motor = True
-
-                    # counter += 1
-                    # vx = vy = forward_speed = HALT_SPEED
-                    # if counter > 50:
-                    #    counter = RESET
-                    #    if final_target:
-                    #        vx = vy = forward_speed = HALT_SPEED
-                    #    else:
-                    #        state = "TAKE_OFF"
-
-            # if starting_edge == True and ending_edge == False and le.sensor_data["stateEstimate.x"] > 1:
-            #    if diff_sum > 0:
-            #        ending_edge = True
-            #        print("end")
-            #        x_end = le.sensor_data["stateEstimate.x"]
-            #        delta_pad = x_init-x_end
-            #        x_landing_center = le.sensor_data["stateEstimate.x"] + delta_pad
-            #        print("delta pad", delta_pad)
-            #        print("Position in X is : ", le.sensor_data["stateEstimate.x"])
-            #        print("Position in X should be : ", x_landing_center)
-#
-            # if ending_edge == True:
-            #    if le.sensor_data["stateEstimate.z"] < 0.14 or kill_motor == True:
-            #        kill_motor = True
-            #        cf.commander.send_stop_setpoint()
-            #        print("kill")
-            #    if kill_motor == False:
-            #        cf.commander.send_position_setpoint(
-            #            x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"] - 0.1, 0)
-            #        print("z: ", le.sensor_data["stateEstimate.z"])
+                    cf.commander.send_stop_setpoint()
+                    if not kill_motor:
+                        print("kill")
+                else:
+                    if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.04:
+                        cf.commander.send_position_setpoint(
+                            x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"] - 0.1, 0
+                        )
+                    else:
+                        cf.commander.send_position_setpoint(
+                            x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0
+                        )
+                print(f"z: {le.sensor_data['stateEstimate.z']}")
 
         # print(le.sensor_data["v.z"])
 
@@ -396,7 +342,7 @@ if __name__ == '__main__':
         # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
         # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
 
-        if land == False and state != "LANDING":
+        if land == False:
             if le.sensor_data["stateEstimate.z"] < 0.10 :
                 #print(le.sensor_data["stateEstimate.z"])
                 cf.commander.send_hover_setpoint(0, 0, 0, z)
@@ -406,3 +352,74 @@ if __name__ == '__main__':
 
     cf.commander.send_stop_setpoint()
     cf.close_link()
+
+
+
+# if state == "LAND" :
+#                 current_position = (le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"])
+#                 if not landing_path_found:
+#                     diff_valid = True
+#                     # prev_range = le.sensor_data["stateEstimate.z"]
+#                     vx = vy = forward_speed = HALT_SPEED
+#                     landing_path_found = True
+#                     comp_points = np.zeros(4)
+#                     landing_position = current_position
+#                     landing_path = robot.create_landing_path(current_position, height_desired)
+#                     path = landing_path
+#                     k = 0
+#                     print("landing path found, path generated : ", len(landing_path))
+
+#                 if diff_sum > 0:
+#                     diff_valid = False
+#                 elif diff_sum < 0 and not diff_valid:
+#                     diff_valid = True
+#                     print("DIFF < 0")
+
+#                 forward_speed = landing_path[k][0]-current_position[0]
+#                 vy = landing_path[k][1]-current_position[1]
+#                 vx = landing_path[k][3]-robot.yaw
+#                 if abs(forward_speed) < 0.2 and abs(vy) < 0.2:
+#                     print("IN SMTH")
+#                     if (k+1) % 2 != 0:
+#                         comp_points[int(k/2)] = 1 if diff_valid else RESET
+#                     k += 1
+#                     if k == 8:
+#                         k = -1
+#                 if k == -1:
+#                     print("in adjusting landing")
+#                     landing_position = robot.adjust_landing(comp_points, landing_position)
+#                     state = "FOUND_LANDING_PAD"
+                
+#                 cf.commander.send_hover_setpoint(forward_speed, vy, le.sensor_data["stateEstimate.z"], 0)
+
+#             elif state == "FOUND_LANDING_PAD":
+#                 print("IN FOUND LANDING PAD")
+#                 current_position = (le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"])
+#                 forward_speed = landing_position[0]-current_position[0]
+#                 vy = landing_position[1]-current_position[1]
+#                 if abs(forward_speed) < 0.2 and abs(vy) < 0.2:
+#                     state = "LANDING"
+#                 cf.commander.send_hover_setpoint(vx, vy, le.sensor_data["stateEstimate.z"], 0)
+
+#             elif state == "LANDING":
+#                 if landing_pos == False:
+#                     x_land_pos = le.sensor_data["stateEstimate.x"]
+#                     y_land_pos = le.sensor_data["stateEstimate.y"]
+#                     print("LAND POS : ", x_land_pos, " ", y_land_pos)
+#                     landing_pos = True
+#                 #print("LANDING")
+#                 vx = vy = forward_speed = HALT_SPEED
+#                 cf.commander.send_position_setpoint(x_land_pos, y_land_pos, le.sensor_data["stateEstimate.z"]-0.02, 0)
+#                 #cf.commander.send_hover_setpoint(0, 0, le.sensor_data["stateEstimate.z"]-0.2, 0)
+#                 if le.sensor_data["stateEstimate.z"] <= 0.11:
+#                     cf.commander.send_stop_setpoint()
+#                     kill_motor = True
+
+#                     # counter += 1
+#                     # vx = vy = forward_speed = HALT_SPEED
+#                     # if counter > 50:
+#                     #    counter = RESET
+#                     #    if final_target:
+#                     #        vx = vy = forward_speed = HALT_SPEED
+#                     #    else:
+#                     #        state = "TAKE_OFF"

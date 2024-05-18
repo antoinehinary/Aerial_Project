@@ -35,7 +35,7 @@ class Agent():
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
-        self.z_target = 0.2
+        self.z_target = 0.3
 
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
