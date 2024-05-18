@@ -32,12 +32,47 @@ class Agent():
         self.state = ARISE
         self.next_state = FIND_LANDING
         self.z_target = 0.6
+        self.idx_goal = 0
+
         
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
         self.prev_force = np.zeros((2,))
-       
+        self.goal_list = self.snake_creation()
+        print("snake creation")
+    
+
+    def snake_creation(self):
+        goal_list = []
+        # for i in range(10, 30, +3): 
+        #     # if i % 2 ==1:               # must be 4 to be correct 
+        #     #     for j in range(2, 28, +3):
+        #     #         goal_list.append((i,j))
+        #     # if i % 2 == 0:
+        #     #     for j in range(29, 2, -3):
+        #     #         goal_list.append((i,j))
+        #     if i % 2 ==1:               # must be 4 to be correct 
+        #         for j in range(2, 8, +3):
+        #             goal_list.append((i,j))
+        #     if i % 2 == 0:
+        #         for j in range(9, 2, -3):
+        #             goal_list.append((i,j))
+
+        goal_list.append((1,1))
+        goal_list.append((1,1.3))
+        goal_list.append((1,1.6))
+        goal_list.append((1,1.9))
+        goal_list.append((2,1.9))
+        goal_list.append((2,1.6))
+        goal_list.append((2,1.3))
+        goal_list.append((2,1))
+        print("goal list :", goal_list)
+
+
+        return goal_list
+
+
     def update(self, sensor_data, dt):
         
         self.sensor_data = sensor_data
@@ -102,7 +137,9 @@ class Agent():
     def find_landing(self):
         
         # self.goal = self.starting_pos + np.array([4,0])
-        self.goal = np.array([4, 0])
+        # self.goal = np.array([2, 0])
+        self.goal = self.goal_list[self.idx_goal]
+
 
         control_command = self.go_to()
         return control_command
@@ -111,7 +148,27 @@ class Agent():
         
         dp = self.goal-self.pos
         d = np.linalg.norm(dp)
-        
+        # print("d : ", d)
+
+        if d < 0.1:
+            self.idx_goal += 1
+            print(" idx increament, go to next goal ")
+            print( " goal :", self.goal)
+            print("next goal :", self.goal[self.idx_goal])
+            print("state : ", self.state)
+            if self.idx_goal == len(self.goal_list):
+                print("end path")
+                return control_command
+
+            # else :
+            #     self.state = FIND_LANDING
+            #     [0.0, 0.0, self.z_target, 0]
+            #     print(" is landing :)")
+            #     return control_command
+            
+        # obstacle dans pt :   
+        # if d < 0.4 and 
+
         force = 0.4*dp/d
         repulsion_force = self.repulsion_force(self.pos)
         
@@ -130,7 +187,9 @@ class Agent():
         d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
         v_des = force * np.clip(d_min/0.3, 0, 1)
         v = rotmat(-self.yaw) @ v_des
-        
+        # print("d_min: ",d_min)
+
+
         z = self.z_target
         # yaw = np.clip(self.height, a_min=0, a_max=0.5)
         yaw_rate = 0.5
