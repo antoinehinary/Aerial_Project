@@ -92,13 +92,15 @@ class LoggingExample:
         self._lg_stab.add_variable('stateEstimate.x', 'float')
         self._lg_stab.add_variable('stateEstimate.y', 'float')
         self._lg_stab.add_variable('stateEstimate.z', 'float')
-        self._lg_stab.add_variable('stabilizer.yaw', 'float')
+
+        self._lg_stab.add_variable('stateEstimate.vz', 'FP16')
+        self._lg_stab.add_variable('stabilizer.yaw', 'FP16')
+        
         self._lg_stab.add_variable('range.front')
         self._lg_stab.add_variable('range.back')
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
         self._lg_stab.add_variable('range.up')
-        self._lg_stab.add_variable('stateEstimate.vz', 'float')
         
 
         # The fetch-as argument can be set to FP16 to save space in the log packet
@@ -170,6 +172,8 @@ if __name__ == '__main__':
     robot = Agent(le.sensor_data, 0.1)
     robot.update(le.sensor_data, 0.1)
     
+    # crf = Crazyflie(rw_cache='./cache')
+
     vz = []
 
     while robot.alive:
@@ -179,7 +183,7 @@ if __name__ == '__main__':
 
         robot.update(le.sensor_data, 0.01)
         
-        vz.append(le.sensor_data['stateEstimate.vz'])
+        # vz.append(le.sensor_data['stateEstimate.vz'])
         
         time.sleep(0.01)
 
