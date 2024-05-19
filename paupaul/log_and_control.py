@@ -107,7 +107,7 @@ class DroneStateMachine:
         self.starting_edge = False
         self.ending_edge = False
         self.height_vect = []
-        self.avg_height
+        self.avg_height = 0
         self.i = 0
         self.x_landing_center = 0.0
         self.y_landing_center = 0.0
