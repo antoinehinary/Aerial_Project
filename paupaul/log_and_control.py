@@ -36,8 +36,9 @@ from cflib.utils import uri_helper
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils.multiranger import Multiranger
+from cflib.crazyflie.high_level_commander import HighLevelCommander
 
-from agent import Agent
+import agent
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -160,6 +161,7 @@ if __name__ == '__main__':
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
     # crf = Crazyflie(rw_cache='./cache')
+    # highLvlCommander = HighLevelCommander(crf)
 
     le = LoggingExample(uri)
     cf = le._cf
@@ -169,7 +171,7 @@ if __name__ == '__main__':
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
 
-    robot = Agent(le.sensor_data, 0.1)
+    robot = agent.Agent(le.sensor_data, 0.1)
     robot.update(le.sensor_data, 0.1)
     
     t = []
@@ -181,8 +183,20 @@ if __name__ == '__main__':
 
         robot.update(le.sensor_data, 0.01)
         vx, vy, z, yaw_rate = robot.state_update()
-        cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
         
+        # if not robot.commander_busy and robot.state == agent.ARISE:
+        #     highLvlCommander.takeoff(robot.z_target, duration_s=3)
+        #     robot.commander_busy = True
+        #     print("commander called")
+            
+        # elif not robot.commander_busy and robot.state == agent.LAND:
+        #     highLvlCommander.land(0, duration_s=3)
+        #     robot.commander_busy = True
+        #     print("commander called")
+
+        # else:
+        cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
+
         t.append(time.time())
         vz.append(le.sensor_data['stateEstimate.vz'])
         

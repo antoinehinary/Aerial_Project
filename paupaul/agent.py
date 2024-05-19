@@ -55,6 +55,7 @@ class Agent():
         
         self.edges = []
         # self.events = []
+        # self.commander_busy = False
        
     def update(self, sensor_data, dt):
         
@@ -98,10 +99,16 @@ class Agent():
             v = rotmat(-self.yaw) @ v_des
             z = np.clip(self.z_target, a_min=None, a_max=self.height+0.3)
             yaw = np.clip(self.height, a_min=0, a_max=0.5)
+            
             control_command = [v[0], v[1], z, yaw]
             return control_command
+        
+            # control_command = [0,0,0,0]
+            return control_command
+        
         else:
             self.state = FIND_LANDING
+            self.commander_busy = False
             # self.events.append("FIND_LANDING")
             # if self.state == FIND_LANDING:
             #     self.state = LAND
