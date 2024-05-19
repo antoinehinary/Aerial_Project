@@ -39,7 +39,7 @@ from cflib.utils.multiranger import Multiranger
 
 from agent import Agent
 import numpy as np
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
@@ -172,18 +172,19 @@ if __name__ == '__main__':
     robot = Agent(le.sensor_data, 0.1)
     robot.update(le.sensor_data, 0.1)
     
-    # crf = Crazyflie(rw_cache='./cache')
-
+    t = []
     vz = []
 
     while robot.alive:
-
         if is_close(le.sensor_data['range.up']):
             break
 
         robot.update(le.sensor_data, 0.01)
+        vx, vy, z, yaw_rate = robot.state_update()
+        cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
         
-        # vz.append(le.sensor_data['stateEstimate.vz'])
+        t.append(time.time())
+        vz.append(le.sensor_data['stateEstimate.vz'])
         
         time.sleep(0.01)
 
@@ -192,7 +193,10 @@ if __name__ == '__main__':
     
     if True:
         ## plotting
-        # vz = np.asarray(vz)
-        # plt.plot(vz, marker="o", color="k")
-        # plt.show()
-        print(vz)
+        vz = np.asarray(vz)
+        t = np.asarray(t) - t[0]
+        
+        plt.plot(t, vz)
+        plt.xlabel("Seconds [s]")
+        plt.ylabel(r"Vertical speed $v_z$ [m/s]")
+        plt.show()

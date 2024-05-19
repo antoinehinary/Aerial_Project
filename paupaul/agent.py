@@ -54,7 +54,7 @@ class Agent():
         self.goal = np.array([4, 0]) # to replace
         
         self.edges = []
-        
+        # self.events = []
        
     def update(self, sensor_data, dt):
         
@@ -101,12 +101,15 @@ class Agent():
             control_command = [v[0], v[1], z, yaw]
             return control_command
         else:
-            if self.state == FIND_LANDING:
-                self.state = self.next_state
-                self.next_state = LAND
-            else:
-                self.state = self.next_state
-                self.next_state = FIND_STARTING
+            self.state = FIND_LANDING
+            # self.events.append("FIND_LANDING")
+            # if self.state == FIND_LANDING:
+            #     self.state = LAND
+            #     self.next_state = LAND
+            #     self.events.append([""])
+            # else:
+            #     self.state = np.copy(self.next_state)
+            #     self.next_state = FIND_STARTING
             return self.state_update()
         
     def find_landing(self, verbose=True):
@@ -120,46 +123,53 @@ class Agent():
                     dp /= np.linalg.norm(dp)
                     self.goal = self.pos + 1.7*0.3*dp
                     
+                    # self.events.append("First edge detected")
                     if verbose: print("First edge detected")
             case 1:
                 if self.sensor_data['stateEstimate.vz'] < -1:
                     self.edges.append(self.pos)
                     self.goal = np.mean(self.edges, axis=0)
                     
+                    # self.events.append("Second edge detected")                    
                     if verbose: print("Second edge detected")
 
-                elif np.linalg.norm(self.pos - self.goal) < 0.02:
+            case 2:
+                if np.linalg.norm(self.pos - self.goal) < 0.02:
                     de = self.edges[1]-self.edges[0]
                     de /= np.linalg.norm(de)
                     self.goal = self.pos + 1.5*0.3*np.array(-de[1], de[0])
-                    
-            case 2:
-                if np.linalg.norm(self.pos - self.goal) < 0.02:
-                    self.alive = False
-                    control_command = [0, 0, 0.6, 0] # last command
-                    
-                    if verbose: print("Arrived at pseudo-center")
-                    
-                    return control_command
                 
                 if self.sensor_data['stateEstimate.vz'] < -1:
                     self.edges.append(self.pos)
                     self.goal = find_landing_pos(self.edges)
                     
+                    # self.events.append("Third edge detected")
                     if verbose: print("Third edge detected")
+                    
+            case 3:
+                if np.linalg.norm(self.pos - self.goal) < 0.02:
+                    self.alive = False
+                    control_command = [0, 0, 0.6, 0] # last command
+                    
+                    # self.events.append("Arrived at pseudo-center")                                        
+                    if verbose: print("Arrived at pseudo-center")
+                    
+                    return control_command
+                
                  
-        control_command = self.go_to()
+        control_command = self.go_to(avoid_obstacles=False)
         return control_command
     
-    def go_to(self):
+    def go_to(self, avoid_obstacles=True):
         
         dp = self.goal-self.pos
         d = np.linalg.norm(dp)
-        
+       
         force = 0.4*dp/d
-        repulsion_force = self.repulsion_force(self.pos)
         
-        force += repulsion_force
+        if avoid_obstacles:
+            repulsion_force = self.repulsion_force(self.pos) 
+            force += repulsion_force
 
         d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
         v_des = force * np.clip(d_min/0.3, 0, 1)

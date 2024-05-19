@@ -33,7 +33,7 @@ for i, edges in enumerate(edges_list):
 
     # Get the center from the agent's find_landing_pos function
     center = agent.find_landing_pos(edges)
-    print(f"Center for edges{i+1}: {center}, type: {type(center)}")
+    print(f"Center for edges{i+1}: {center}")
 
     # Plot the points
     ax.scatter(edges[:, 0], edges[:, 1], color='blue', label='Points')
