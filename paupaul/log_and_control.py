@@ -98,17 +98,6 @@ class LoggingExample:
         print('Disconnected from %s' % link_uri)
         self.is_connected = False
 
-def snake_creation():
-    goal_list = []
-    for i in range(10, 30, 3):
-        if i % 2 == 1:
-            for j in range(2, 28, 3):
-                goal_list.append((i, j))
-        if i % 2 == 0:
-            for j in range(29, 2, -3):
-                goal_list.append((i, j))
-    return goal_list
-
 class DroneStateMachine:
     def __init__(self, cf, le):
         self.cf = cf
