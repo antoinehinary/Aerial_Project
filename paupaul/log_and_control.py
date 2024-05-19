@@ -37,6 +37,10 @@ from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils.multiranger import Multiranger
 
+from agent import Agent
+import numpy as np
+# import matplotlib.pyplot as plt
+
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
 start_search = False
@@ -149,15 +153,11 @@ class LoggingExample:
         print('Disconnected from %s' % link_uri)
         self.is_connected = False
 
-from agent import Agent
-import numpy as np
-import matplotlib.pyplot as plt
-
 if __name__ == '__main__':
 
     # Initialize the low-level drivers
     cflib.crtp.init_drivers()
-    crf = Crazyflie(rw_cache='./cache')
+    # crf = Crazyflie(rw_cache='./cache')
 
     le = LoggingExample(uri)
     cf = le._cf
@@ -188,6 +188,7 @@ if __name__ == '__main__':
     
     if True:
         ## plotting
-        vz = np.asarray(vz)
-        plt.plot(vz, marker="o", color="k")
-        plt.show()
+        # vz = np.asarray(vz)
+        # plt.plot(vz, marker="o", color="k")
+        # plt.show()
+        print(vz)
