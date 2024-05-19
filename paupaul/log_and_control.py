@@ -132,6 +132,7 @@ class DroneStateMachine:
         if self.state == "INIT":
             if z > 0.2:
                 self.state = "MOVE_FORWARD"
+                print("MOVE_FORWARD")
             else:
                 self.cf.commander.send_hover_setpoint(0, 0, 0, z + 0.02)
 
@@ -140,6 +141,7 @@ class DroneStateMachine:
 
             if (self.avg_height > 12) and not self.starting_edge and le.sensor_data["stateEstimate.x"] > 1:
                 self.state = "EDGE_DETECTED"
+                print("EDGE_DETECTED")
                 self.starting_edge = True
                 self.stop_cycles = 20
 
@@ -150,16 +152,19 @@ class DroneStateMachine:
             else:
                 self.cf.commander.send_position_setpoint(sensor_data["stateEstimate.x"] + 0.15, sensor_data["stateEstimate.y"], z, 0)
                 self.state = "SEARCH_FALLING_EDGE"
+                print("SEARCH_FALLING_EDGE")
 
         elif self.state == "SEARCH_FALLING_EDGE":
             self.cf.commander.send_hover_setpoint(0, -0.1, 0, z)
             if (self.avg_height > 12) and not self.starting_edge and le.sensor_data["stateEstimate.x"] > 1:
                 self.state = "MOVE_TO_LAND_POSITION"
+                print("MOVE_TO_LAND_POSITION")
 
         elif self.state == "MOVE_TO_LAND_POSITION":
             self.cf.commander.send_position_setpoint(sensor_data["stateEstimate.x"], sensor_data["stateEstimate.y"] - 0.15, z)
             if abs(sensor_data["stateEstimate.y"] - (self.y_landing_center - 0.15)) < 0.01:
                 self.state = "LANDING"
+                print("LANDING")
 
         elif self.state == "LANDING":
             self.cf.commander.send_hover_setpoint(0, 0, 0, z - 0.02)
@@ -188,4 +193,5 @@ if __name__ == '__main__':
         state_machine.update()
         time.sleep(0.1)
 
+    cf.commander.send_stop_setpoint()
     cf.close_link()
