@@ -94,7 +94,7 @@ class LoggingExample:
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
         self._lg_stab.add_variable('range.up')
-        self._lg_stab.add_variable('stateEstimate.az', 'float')
+        self._lg_stab.add_variable('stateEstimate.vz', 'float')
         
 
         # The fetch-as argument can be set to FP16 to save space in the log packet
@@ -170,7 +170,7 @@ if __name__ == '__main__':
     robot = Agent(le.sensor_data, 0.1)
     robot.update(le.sensor_data, 0.1)
     
-    z_acc = []
+    vz = []
 
     while robot.alive:
 
@@ -179,7 +179,7 @@ if __name__ == '__main__':
 
         robot.update(le.sensor_data, 0.01)
         
-        z_acc.append(le.sensor_data['stateEstimate.az'])
+        vz.append(le.sensor_data['stateEstimate.vz'])
         
         time.sleep(0.01)
 
@@ -188,6 +188,6 @@ if __name__ == '__main__':
     
     if True:
         ## plotting
-        z_acc = np.asarray(z_acc)
-        plt.plot(z_acc, marker="o", color="k")
+        vz = np.asarray(vz)
+        plt.plot(vz, marker="o", color="k")
         plt.show()

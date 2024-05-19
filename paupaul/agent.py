@@ -113,7 +113,7 @@ class Agent():
         
         match len(self.edges):
             case 0:
-                if self.sensor_data['stateEstimate.az'] > 1:
+                if self.sensor_data['stateEstimate.vz'] > 1:
                     self.edges.append(self.pos)
                     ## continue in the same direction
                     dp = self.goal-self.pos
@@ -122,7 +122,7 @@ class Agent():
                     
                     if verbose: print("First edge detected")
             case 1:
-                if self.sensor_data['stateEstimate.az'] < -1:
+                if self.sensor_data['stateEstimate.vz'] < -1:
                     self.edges.append(self.pos)
                     self.goal = np.mean(self.edges, axis=0)
                     
@@ -142,7 +142,7 @@ class Agent():
                     
                     return control_command
                 
-                if self.sensor_data['stateEstimate.az'] < -1:
+                if self.sensor_data['stateEstimate.vz'] < -1:
                     self.edges.append(self.pos)
                     self.goal = find_landing_pos(self.edges)
                     
