@@ -176,31 +176,33 @@ if __name__ == '__main__':
     
     t = []
     vz = []
+    x = []
+    y = []
+    
+    current_state = robot.state
+    state_changes = []
 
     while robot.alive:
+        
+        time.sleep(0.01)
+
         if is_close(le.sensor_data['range.up']):
             break
 
         robot.update(le.sensor_data, 0.01)
         vx, vy, z, yaw_rate = robot.state_update()
         
-        # if not robot.commander_busy and robot.state == agent.ARISE:
-        #     highLvlCommander.takeoff(robot.z_target, duration_s=3)
-        #     robot.commander_busy = True
-        #     print("commander called")
-            
-        # elif not robot.commander_busy and robot.state == agent.LAND:
-        #     highLvlCommander.land(0, duration_s=3)
-        #     robot.commander_busy = True
-        #     print("commander called")
-
-        # else:
         cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
 
+        ## plotting
         t.append(time.time())
         vz.append(le.sensor_data['stateEstimate.vz'])
+        x.append(le.sensor_data['stateEstimate.x'])
+        y.append(le.sensor_data['stateEstimate.y'])
         
-        time.sleep(0.01)
+        if robot.state != current_state:
+            state_changes.append(t[-1])
+            current_state = int(robot.state)
 
     cf.commander.send_stop_setpoint()
     cf.close_link()
@@ -208,9 +210,22 @@ if __name__ == '__main__':
     if True:
         ## plotting
         vz = np.asarray(vz)
+        state_changes = np.asarray(state_changes) - t[0]
+        x = np.asarray(x)
+        y = np.asarray(y)
         t = np.asarray(t) - t[0]
         
         plt.plot(t, vz)
         plt.xlabel("Seconds [s]")
         plt.ylabel(r"Vertical speed $v_z$ [m/s]")
+        plt.vlines(state_changes, -0.5, 0.5, colors='r', linestyles='--')
+        plt.show()
+
+        plt.plot(x, y, label="positions", linestyles="--")
+        edges = np.asarray(robot.edges)
+        plt.scatter(edges[:,0], edges[:,1], marker="o", label="Edges")
+        plt.scatter(robot.goal[0], robot.goal[1], marker="x")
+        plt.xlabel("X [m]")
+        plt.ylabel("Y [m]")
+        plt.legend()
         plt.show()

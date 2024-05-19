@@ -103,9 +103,6 @@ class Agent():
             control_command = [v[0], v[1], z, yaw]
             return control_command
         
-            # control_command = [0,0,0,0]
-            return control_command
-        
         else:
             self.state = FIND_LANDING
             self.commander_busy = False
@@ -123,7 +120,7 @@ class Agent():
         
         match len(self.edges):
             case 0:
-                if self.sensor_data['stateEstimate.vz'] > 1:
+                if self.sensor_data['stateEstimate.vz'] > 0.2:
                     self.edges.append(self.pos)
                     ## continue in the same direction
                     dp = self.goal-self.pos
@@ -133,7 +130,7 @@ class Agent():
                     # self.events.append("First edge detected")
                     if verbose: print("First edge detected")
             case 1:
-                if self.sensor_data['stateEstimate.vz'] < -1:
+                if self.sensor_data['stateEstimate.vz'] < -0.2:
                     self.edges.append(self.pos)
                     self.goal = np.mean(self.edges, axis=0)
                     
@@ -145,8 +142,9 @@ class Agent():
                     de = self.edges[1]-self.edges[0]
                     de /= np.linalg.norm(de)
                     self.goal = self.pos + 1.5*0.3*np.array(-de[1], de[0])
-                
-                if self.sensor_data['stateEstimate.vz'] < -1:
+                    if verbose: print("Looking for third edge")
+
+                if self.sensor_data['stateEstimate.vz'] < -0.2:
                     self.edges.append(self.pos)
                     self.goal = find_landing_pos(self.edges)
                     
@@ -163,8 +161,11 @@ class Agent():
                     
                     return control_command
                 
-                 
-        control_command = self.go_to(avoid_obstacles=False)
+        if len(self.edges):       
+            control_command = self.go_to(avoid_obstacles=False)
+        else:
+            control_command = self.go_to()
+
         return control_command
     
     def go_to(self, avoid_obstacles=True):
@@ -180,6 +181,10 @@ class Agent():
 
         d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
         v_des = force * np.clip(d_min/0.3, 0, 1)
+        
+        ## reduce the speed if trying to find edges
+        if len(self.edges): force /= 4
+        
         v = rotmat(-self.yaw) @ v_des
         
         z = self.z_target
