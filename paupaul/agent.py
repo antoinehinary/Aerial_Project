@@ -1,7 +1,11 @@
 ## AGENT
 import numpy as np
 from scipy.optimize import minimize
-from simple_pid import PID
+# from simple_pid import PID
+from collections import deque 
+from scipy.signal import find_peaks
+import os
+
 # STATES
 ARISE = 0
 LAND = 1
@@ -47,16 +51,15 @@ class Agent():
         self.next_state = FIND_LANDING
         self.z_target = 0.4
         
+        self.pos_history = deque(maxlen=150)
+        self.edges = []
+
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
         
         self.goal = np.array([4, 0]) # to replace
         
-        self.edges = []
-        
-        # self.z_pid = PID(0,1)
-        # self.commander_busy = False
        
     def update(self, sensor_data, dt):
         
@@ -64,8 +67,11 @@ class Agent():
         self.dt = dt
         
         self.pos = np.array([sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y']])
-        
         self.height = sensor_data['stateEstimate.z']
+        
+        pos_plus = np.concatenate([self.pos, [self.height]])
+        self.pos_history.append(pos_plus)
+        
         self.yaw = sensor_data['stabilizer.yaw']*np.pi/180
         
     def state_update(self):
@@ -115,36 +121,43 @@ class Agent():
             #     self.state = np.copy(self.next_state)
             #     self.next_state = FIND_STARTING
             return self.state_update()
+    
+    def detect_edge(self):
         
-    def find_landing(self, verbose=True):
-                
+        hist = np.asarray(self.pos_history)
+    
+        p, _ = find_peaks(-hist[:,2], prominence=0.05)
+        if len(p) == 1:
+            index = np.argmax(hist[0:p[0], 2])
+            pos = hist[index, 0:2]
+            self.edges.append(pos)
+            
+            np.save(os.path.join("paupaul", "logs", "edge"), hist)
+            
+            self.pos_history.clear()
+        
+    def find_landing(self, verbose=True):    
         match len(self.edges):
             case 0:
-                if self.sensor_data['stateEstimate.vz'] < -0.05: ## from graph (ok when charged because stable)
-                    
+                self.detect_edge()
+
+                if len(self.edges) == 1:
                     dp = self.goal-self.pos
-                    dp /= np.linalg.norm(dp)
+                    dp /= np.linalg.norm(dp) + 0.00001
+                    self.goal = self.pos + 2*dp
 
-                    e = self.pos - dp * 0.4*0.1
-                    
-                    self.edges.append(e)
-   
-                    self.goal = self.pos + 0.6*dp
-
-                    # self.z_target -= 0.15
                     if verbose: print("First edge detected")
             case 1:
-                if False:
+                self.detect_edge()
+                
+                if len(self.edges) == 2:
 
-                # if self.sensor_data['stateEstimate.vz'] > 0.05:
-
-                    self.edges.append(self.pos)
                     self.goal = np.mean(self.edges, axis=0)
                     self.mean_toggle = True # for the case 2
-
+                    
                     if verbose: print("Second edge detected")
 
-            case 2:
+            case 2:                
                 if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.02:
                     de = self.edges[1]-self.edges[0]
                     de /= np.linalg.norm(de)
@@ -153,11 +166,16 @@ class Agent():
                     
                     if verbose: print("Looking for third edge")
 
-                elif not self.mean_toggle and self.sensor_data['stateEstimate.vz'] < -0.1:
-                    self.edges.append(self.pos)
-                    self.goal = find_landing_pos(self.edges)
+                elif not self.mean_toggle:
                     
-                    if verbose: print("Third edge detected")
+                    self.detect_edge()
+                    
+                    if len(self.edges) == 3:
+                    
+                        self.edges.append(self.pos)
+                        self.goal = find_landing_pos(self.edges)
+               
+                        if verbose: print("Third edge detected")
                     
             case 3:
                 if np.linalg.norm(self.pos - self.goal) < 0.02:

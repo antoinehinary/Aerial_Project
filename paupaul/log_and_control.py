@@ -42,6 +42,7 @@ import agent
 import numpy as np
 import matplotlib.pyplot as plt
 import keyboard
+import os
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
@@ -245,7 +246,7 @@ if __name__ == '__main__':
         plt.fill_between(t, 0.5, where = keypressed, facecolor='green', alpha=.5)
         plt.vlines(state_changes, 0, 0.7, colors='r', linestyles='--')
         
-        plt.savefig("zs")
+        plt.savefig(os.path.join("paupaul", "logs", "zs"))
         plt.show()
 
 
@@ -259,5 +260,7 @@ if __name__ == '__main__':
         plt.xlabel("X [m]")
         plt.ylabel("Y [m]")
         plt.legend()
-        plt.savefig("Trajectory")
+        plt.savefig(os.path.join("paupaul", "logs", "trajectory"))
         plt.show()
+        
+        np.save(os.path.join("paupaul", "logs", "z_list"), z_list)
