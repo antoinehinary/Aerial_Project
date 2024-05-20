@@ -172,19 +172,24 @@ class Agent():
                     
                     if len(self.edges) == 3:
                     
-                        self.edges.append(self.pos)
                         self.goal = find_landing_pos(self.edges)
+
+                        print("Goal:", self.goal)
                
                         if verbose: print("Third edge detected")
                     
             case 3:
-                if np.linalg.norm(self.pos - self.goal) < 0.02:
+                if np.linalg.norm(self.pos - self.goal) < 0.04:
                     self.alive = False
-                    control_command = [0, 0, 0.6, 0] # last command
+                    control_command = [0, 0, self.z_target, 0] # last command
                     
                     if verbose: print("Arrived at pseudo-center")
+                    self.alive = False
                     
                     return control_command
+            case _:
+                print("Too many edges")
+                self.alive = False
                 
         if len(self.edges):
             control_command = self.go_to(avoid_obstacles=False)
