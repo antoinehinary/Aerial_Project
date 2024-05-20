@@ -54,27 +54,6 @@ class Agent():
     
 
     def snake_creation(self):
-        # goal_list = []
-        # for i in range(1, 2, +3): 
-            # if i % 2 ==1:               # must be 4 to be correct 
-            #     for j in range(2, 28, +3):
-            #         goal_list.append((i,j))
-            # if i % 2 == 0:
-            #     for j in range(29, 2, -3):
-            #         goal_list.append((i,j))
-
-
-        # goal_list.append((1,1))
-        # goal_list.append((1,0.7))
-        # goal_list.append((1,0.4))
-        # goal_list.append((1,0.1))
-        # goal_list.append((2,0.1))
-        # goal_list.append((2,0.4))
-        # goal_list.append((2,0.7))
-        # goal_list.append((2,1))
-        # print("goal list :", goal_list)
-
-        ###################
 
         goal_list = []
         width = 1  # Width of the area in meters
@@ -133,6 +112,7 @@ class Agent():
         obstacles = [self.pos + self.sensor_data[sensor]*direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
         self.obst = sorted(np.concatenate([self.obst, obstacles], axis=0).tolist(), key=lambda x: np.linalg.norm(x-self.pos))
         self.obst = np.asarray(self.obst)[0:4] # keep only 4 nearest
+        
         
     def arise(self):
         

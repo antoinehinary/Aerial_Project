@@ -339,17 +339,7 @@ if __name__ == '__main__':
         vx, vy, z, yaw_rate = robot.state_update()
 
         # print("range front :", le.sensor_data["range.front"])
-            # 
-        # if kill_motor == False:
-        #     vx, vy, z, yaw_rate = robot.state_update()
-        # vz = -(le.sensor_data["stateEstimate.z"] - z)
-        # print(le.sensor_data["stateEstimate.z"])
-        # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
-        # print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
-        # print("command", [vx, vy, z, yaw_rate])
-        # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
-        # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
-
+        
         # if ending_edge == False : 
         
         cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
