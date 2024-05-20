@@ -42,6 +42,14 @@ class Agent():
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
         self.prev_force = np.zeros((2,))
 
+        # To retrace the steps backwards
+        self.trajectory = []  
+
+        # List of waypoints for snake search
+        self.waypoints = []  
+        self.current_waypoint_index = 0 
+
+
     def update(self, sensor_data, dt):
 
         self.sensor_data = sensor_data
@@ -52,15 +60,8 @@ class Agent():
         self.height = sensor_data['stateEstimate.z']
         self.yaw = sensor_data['stabilizer.yaw']*np.pi/180
 
-    def adjust_landing(self, comp_points, pad_land):
-        global landing_path_found, state
-        adjustments = [(-0.1, 0), (0, -0.1), (0.1, 0), (0, 0.1)]
-        for index, point in enumerate(comp_points):
-            if not point:
-                pad_land = (pad_land[0] + adjustments[index][0], pad_land[1] + adjustments[index][1])
-        landing_path_found = False
-
-        return pad_land
+        # Save the current position to the trajectory
+        self.trajectory.append(np.copy(self.pos))
 
     def state_update(self):
 
@@ -79,18 +80,6 @@ class Agent():
             control_command = 4*[0]
 
         return control_command
-
-    def create_landing_path(self, current_position, height_desired):
-        global landing_path
-        landing_path = np.array([[current_position[0]+0.1, current_position[1], height_desired, 0],
-                                [current_position[0]+0.1, current_position[1]+0.1, height_desired, 0],
-                                [current_position[0], current_position[1]+0.1, height_desired, 0],
-                                [current_position[0]-0.1, current_position[1]+0.1, height_desired, 0],
-                                [current_position[0]-0.1, current_position[1], height_desired, 0],
-                                [current_position[0]-0.1, current_position[1]-0.1, height_desired, 0],
-                                [current_position[0], current_position[1]-0.1, height_desired, 0],
-                                [current_position[0], current_position[1], height_desired, 0]])
-        return landing_path
 
     def update_obstacles(self):
 
@@ -128,11 +117,37 @@ class Agent():
 
     def find_landing(self):
 
-        # self.goal = self.starting_pos + np.array([4,0])
-        self.goal = np.array([4, 0])
+        if not self.waypoints:
+            self.waypoints = self.snake_creation()
 
-        control_command = self.go_to()
-        return control_command
+        if self.current_waypoint_index < len(self.waypoints):
+            self.goal = self.waypoints[self.current_waypoint_index]
+            control_command = self.go_to()
+
+            if np.linalg.norm(self.goal - self.pos) < 0.1: 
+                self.current_waypoint_index += 1
+
+            return control_command
+        else:
+            self.state = LAND
+            return [0, 0, self.z_target, 0.5]
+
+    def snake_creation(self):
+        goal_list = []
+        x_start, y_start = self.starting_pos
+        x_min, x_max = 3.4, 4.8
+        y_min, y_max = 0.2, 2.8
+        x_range = np.arange(x_min, x_max, 0.3)
+        y_range_even = np.arange(y_min, y_max, 0.3)
+        y_range_odd = y_range_even[::-1]
+        for i, x in enumerate(x_range):
+            if i % 2 == 0:
+                for y in y_range_even:
+                    goal_list.append([x, y])
+            else:
+                for y in y_range_odd:
+                    goal_list.append([x, y])
+        return goal_list  
 
     def go_to(self):
 
@@ -182,6 +197,11 @@ class Agent():
             f -= force * (do/d)
 
         return f
+
+    def retrace_trajectory(self):
+        # Reverse the trajectory for the backward trajectory
+        retrace_path = self.trajectory[::-1]  
+        return retrace_path
 
     # def force_filter(self, force):
     #     tau = 0.25
