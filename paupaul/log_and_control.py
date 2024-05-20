@@ -31,6 +31,7 @@ import numpy as np
 import logging
 import time
 from threading import Timer
+import math
 
 import cflib.crtp  # noqa
 from cflib.crazyflie import Crazyflie
@@ -164,6 +165,41 @@ def snake_creation():
                 goal_list.append((i, j))
     return goal_list
 
+def control_law(dx, dy, current_yaw, goal_dist):
+    kp_yaw = 0.5
+    kp_pos = 0.22  # 0.5 : chao, 0.3 marche
+    kd = 0
+    max_speed = 1
+    # Calculate desired yaw angle
+    desired_yaw = math.atan2(dx, dy)
+
+    # Calculate yaw rate command
+    yaw_rate = kp_yaw * (desired_yaw - current_yaw)
+
+    # Limit yaw rate to a maximum value
+    max_yaw_rate = math.pi / 4  # Example maximum yaw rate (45 degrees per second)
+    yaw_rate = max(-max_yaw_rate, min(max_yaw_rate, yaw_rate))
+
+    # Calculate velocity commands
+    dpos = np.array([dx, dy])
+    v_word = kp_pos * dpos / goal_dist #normalize
+    
+    vel_rot_mat = np.array(
+            [
+                [np.cos(-current_yaw), -np.sin(-current_yaw)],
+                [np.sin(-current_yaw), np.cos(-current_yaw)],
+            ]
+        )
+    vx_body, vy_body = np.dot(vel_rot_mat, [v_word[0], v_word[1]])
+
+    # vel_x = kp_pos * dx/goal_dist #normalize
+    # vel_y = kp_pos * dy/goal_dist
+
+    # Limit velocity commands to maximum speed
+    vx_body = max(-max_speed, min(max_speed, vx_body))
+    vy_body = max(-max_speed, min(max_speed, vy_body))
+
+    return vx_body, vy_body, yaw_rate
 
 if __name__ == '__main__':
 
@@ -322,9 +358,13 @@ if __name__ == '__main__':
                 #     cf.commander.send_hover_setpoint( 0.0, 0, 0, le.sensor_data["stateEstimate.z"])
                 if abs(x_landing_center-le.sensor_data["stateEstimate.x"]) < 0.008:
                     state = "CENTERING_Y_LANDING"
+                    exit()
                     cf.commander.send_hover_setpoint( 0.0, 0, 0, le.sensor_data["stateEstimate.z"])
                 else :
-                    cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
+
+                    vx_body, vy_body, yaw_rate = control_law(le.sensor_data["stateEstimate.x"] - x_landing_center, 0 , 0, np.norm([le.sensor_data["stateEstimate.x"],x_landing_center ], 2))
+                    cf.commander.send_hover_setpoint( vx_body, vy_body, 0, le.sensor_data["stateEstimate.z"])
+                    # cf.commander.send_position_setpoint(x_landing_center, le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"], 0)
 
             # Detect ending edge for the 2nd axis
             elif state == "CENTERING_Y_LANDING":

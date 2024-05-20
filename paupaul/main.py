@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation as R
 import my_control
 import time, random
 import cv2
+import math
 
 exp_num = 3                     # 0: Coordinate Transformation, 1: PID Tuning, 2: Kalman Filter, 3: Practical
 control_style = 'autonomous'      # 'keyboard' or 'autonomous'
@@ -528,6 +529,39 @@ class CrazyflieInDroneDome(Supervisor):
         # Update drone states in simulation
         super().step(self.timestep)
 
+
+def control_law(dx, dy, current_yaw, goal_dist):
+    kp_yaw = 0.5
+    kp_pos = 0.22  # 0.5 : chao, 0.3 marche
+    kd = 0
+    max_speed = 1
+    # Calculate desired yaw angle
+    desired_yaw = math.atan2(dx, dy)
+
+    # Calculate yaw rate command
+    yaw_rate = kp_yaw * (desired_yaw - current_yaw)
+
+    # Limit yaw rate to a maximum value
+    max_yaw_rate = math.pi / 4  # Example maximum yaw rate (45 degrees per second)
+    yaw_rate = max(-max_yaw_rate, min(max_yaw_rate, yaw_rate))
+
+    # Calculate velocity commands
+    dpos = np.array([dx, dy])
+    v_word = kp_pos * dpos / goal_dist #normalize
+    
+    vel_rot_mat = np.array(
+            [
+                [np.cos(-current_yaw), -np.sin(-current_yaw)],
+                [np.sin(-current_yaw), np.cos(-current_yaw)],
+            ]
+        )
+    vx_body, vy_body = np.dot(vel_rot_mat, [v_word[0], v_word[1]])
+
+    # Limit velocity commands to maximum speed
+    vx_body = max(-max_speed, min(max_speed, vx_body))
+    vy_body = max(-max_speed, min(max_speed, vy_body))
+
+    return vx_body, vy_body, yaw_rate
 
 if __name__ == '__main__':
 
