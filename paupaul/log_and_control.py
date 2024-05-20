@@ -230,16 +230,6 @@ def occupancy_map(sensor_data):
 
     return map
 
-def snake_creation():
-    goal_list = []
-    for i in range(10, 30, +3): 
-        if i % 2 ==1:               # must be 4 to be correct 
-            for j in range(2, 28, +3):
-                goal_list.append((i,j))
-        if i % 2 == 0:
-            for j in range(29, 2, -3):
-                goal_list.append((i,j))
-    return goal_list
 
 def _get_movements_4n():
     """
