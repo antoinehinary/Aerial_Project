@@ -1,7 +1,7 @@
 ## AGENT
 import numpy as np
 from scipy.optimize import minimize
-
+from simple_pid import PID
 # STATES
 ARISE = 0
 LAND = 1
@@ -45,7 +45,7 @@ class Agent():
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
-        self.z_target = 0.6
+        self.z_target = 0.4
         
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
@@ -54,6 +54,8 @@ class Agent():
         self.goal = np.array([4, 0]) # to replace
         
         self.edges = []
+        
+        # self.z_pid = PID(0,1)
         # self.commander_busy = False
        
     def update(self, sensor_data, dt):
@@ -115,20 +117,27 @@ class Agent():
             return self.state_update()
         
     def find_landing(self, verbose=True):
-        
+                
         match len(self.edges):
             case 0:
-                if self.sensor_data['stateEstimate.vz'] > 0.1:
-                    self.edges.append(self.pos)
-                    ## continue in the same direction
+                if self.sensor_data['stateEstimate.vz'] < -0.05: ## from graph (ok when charged because stable)
+                    
                     dp = self.goal-self.pos
                     dp /= np.linalg.norm(dp)
-                    self.goal = self.pos + 1.7*0.3*dp
+
+                    e = self.pos - dp * 0.4*0.1
                     
+                    self.edges.append(e)
+   
+                    self.goal = self.pos + 0.6*dp
+
                     # self.z_target -= 0.15
                     if verbose: print("First edge detected")
             case 1:
-                if self.sensor_data['stateEstimate.vz'] < -0.1:
+                if False:
+
+                # if self.sensor_data['stateEstimate.vz'] > 0.05:
+
                     self.edges.append(self.pos)
                     self.goal = np.mean(self.edges, axis=0)
                     self.mean_toggle = True # for the case 2
@@ -169,7 +178,7 @@ class Agent():
     def go_to(self, avoid_obstacles=False):
         
         dp = self.goal-self.pos
-        d = np.linalg.norm(dp)
+        d = np.linalg.norm(dp)+0.0001 ## no 0 allowed
        
         force = 0.4*dp/d
         
@@ -177,15 +186,19 @@ class Agent():
             repulsion_force = self.repulsion_force(self.pos) 
             force += repulsion_force
 
+        ## reduce the speed if trying to find edges
+        if self.state == FIND_LANDING and len(self.edges): force /= 2
+
         d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
         v_des = force * np.clip(d_min/0.3, 0, 1)
         
-        ## reduce the speed if trying to find edges
-        if self.state == FIND_LANDING and len(self.edges): force = 0.05*dp/d
+
         
         v = rotmat(-self.yaw) @ v_des
         
+        # z = self.z_target + self.z_pid(self.sensor_data['stateEstimate.vz'])
         z = self.z_target
+
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
  

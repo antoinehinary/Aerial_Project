@@ -102,8 +102,8 @@ class LoggingExample:
         self._lg_stab.add_variable('range.back')
         self._lg_stab.add_variable('range.left')
         self._lg_stab.add_variable('range.right')
-        self._lg_stab.add_variable('range.up')
-        
+        self._lg_stab.add_variable('range.up')        
+        # self._lg_stab.add_variable('range.zrange') ## same as z
 
         # The fetch-as argument can be set to FP16 to save space in the log packet
         # self._lg_stab.add_variable('pm.vbat', 'FP16')
@@ -199,6 +199,7 @@ if __name__ == '__main__':
         cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
 
         ## plotting
+        
         t.append(time.time())
         vz.append(le.sensor_data['stateEstimate.vz'])
         x.append(le.sensor_data['stateEstimate.x'])
@@ -250,7 +251,7 @@ if __name__ == '__main__':
 
         plt.plot(x, y, label="Trajectory")
         edges = np.asarray(robot.edges)
-        if len(edges)>=2: 
+        if len(edges) == 3: 
             plt.scatter(edges[:,0], edges[:,1], marker="o", label=f"{len(edges)} Edges", color="g")
             plt.scatter( np.mean(edges[0:2], axis=0)[0],  np.mean(edges[0:2], axis=0)[1], marker="x", color="g")
            
