@@ -54,7 +54,6 @@ class Agent():
         self.goal = np.array([4, 0]) # to replace
         
         self.edges = []
-        # self.events = []
         # self.commander_busy = False
        
     def update(self, sensor_data, dt):
@@ -106,7 +105,6 @@ class Agent():
         else:
             self.state = FIND_LANDING
             self.commander_busy = False
-            # self.events.append("FIND_LANDING")
             # if self.state == FIND_LANDING:
             #     self.state = LAND
             #     self.next_state = LAND
@@ -120,35 +118,36 @@ class Agent():
         
         match len(self.edges):
             case 0:
-                if self.sensor_data['stateEstimate.vz'] > 0.2:
+                if self.sensor_data['stateEstimate.vz'] > 0.1:
                     self.edges.append(self.pos)
                     ## continue in the same direction
                     dp = self.goal-self.pos
                     dp /= np.linalg.norm(dp)
                     self.goal = self.pos + 1.7*0.3*dp
                     
-                    # self.events.append("First edge detected")
+                    # self.z_target -= 0.15
                     if verbose: print("First edge detected")
             case 1:
-                if self.sensor_data['stateEstimate.vz'] < -0.2:
+                if self.sensor_data['stateEstimate.vz'] < -0.1:
                     self.edges.append(self.pos)
                     self.goal = np.mean(self.edges, axis=0)
-                    
-                    # self.events.append("Second edge detected")                    
+                    self.mean_toggle = True # for the case 2
+
                     if verbose: print("Second edge detected")
 
             case 2:
-                if np.linalg.norm(self.pos - self.goal) < 0.02:
+                if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.02:
                     de = self.edges[1]-self.edges[0]
                     de /= np.linalg.norm(de)
                     self.goal = self.pos + 1.5*0.3*np.array(-de[1], de[0])
+                    self.mean_toggle = False
+                    
                     if verbose: print("Looking for third edge")
 
-                if self.sensor_data['stateEstimate.vz'] < -0.2:
+                elif not self.mean_toggle and self.sensor_data['stateEstimate.vz'] < -0.1:
                     self.edges.append(self.pos)
                     self.goal = find_landing_pos(self.edges)
                     
-                    # self.events.append("Third edge detected")
                     if verbose: print("Third edge detected")
                     
             case 3:
@@ -156,19 +155,18 @@ class Agent():
                     self.alive = False
                     control_command = [0, 0, 0.6, 0] # last command
                     
-                    # self.events.append("Arrived at pseudo-center")                                        
                     if verbose: print("Arrived at pseudo-center")
                     
                     return control_command
                 
-        if len(self.edges):       
+        if len(self.edges):
             control_command = self.go_to(avoid_obstacles=False)
         else:
             control_command = self.go_to()
 
         return control_command
     
-    def go_to(self, avoid_obstacles=True):
+    def go_to(self, avoid_obstacles=False):
         
         dp = self.goal-self.pos
         d = np.linalg.norm(dp)
@@ -183,7 +181,7 @@ class Agent():
         v_des = force * np.clip(d_min/0.3, 0, 1)
         
         ## reduce the speed if trying to find edges
-        if len(self.edges): force /= 4
+        if self.state == FIND_LANDING and len(self.edges): force = 0.05*dp/d
         
         v = rotmat(-self.yaw) @ v_des
         

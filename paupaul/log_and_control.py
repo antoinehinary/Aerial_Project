@@ -41,6 +41,7 @@ from cflib.crazyflie.high_level_commander import HighLevelCommander
 import agent
 import numpy as np
 import matplotlib.pyplot as plt
+import keyboard
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
@@ -178,10 +179,13 @@ if __name__ == '__main__':
     vz = []
     x = []
     y = []
+    z_list = []
+    keypressed = []
     
     current_state = robot.state
-    state_changes = []
-
+    current_edges = len(robot.edges)
+    changes = []
+    
     while robot.alive:
         
         time.sleep(0.01)
@@ -199,33 +203,60 @@ if __name__ == '__main__':
         vz.append(le.sensor_data['stateEstimate.vz'])
         x.append(le.sensor_data['stateEstimate.x'])
         y.append(le.sensor_data['stateEstimate.y'])
+        z_list.append(le.sensor_data['stateEstimate.z'])
         
         if robot.state != current_state:
-            state_changes.append(t[-1])
+            changes.append(t[-1])
             current_state = int(robot.state)
-
+        if len(robot.edges) != current_edges:
+            changes.append(t[-1])
+            current_edges = len(robot.edges)
+            
+        if keyboard.is_pressed('q'): keypressed.append(1)
+        else: keypressed.append(0)
+            
+            
     cf.commander.send_stop_setpoint()
     cf.close_link()
     
     if True:
         ## plotting
         vz = np.asarray(vz)
-        state_changes = np.asarray(state_changes) - t[0]
+        state_changes = np.asarray(changes) - t[0]
         x = np.asarray(x)
         y = np.asarray(y)
+        z_list = np.asarray(z_list)
         t = np.asarray(t) - t[0]
+        keypressed = np.asarray(keypressed)
         
+        plt.subplot(1,2,1)
         plt.plot(t, vz)
         plt.xlabel("Seconds [s]")
         plt.ylabel(r"Vertical speed $v_z$ [m/s]")
+        plt.fill_between(t, 0.5, where = keypressed, facecolor='green', alpha=.5)
         plt.vlines(state_changes, -0.5, 0.5, colors='r', linestyles='--')
+        
+        plt.subplot(1,2,2)
+        plt.plot(t, z_list)
+        plt.xlabel("Seconds [s]")
+        plt.ylabel("z [m]")
+        
+        plt.fill_between(t, 0.5, where = keypressed, facecolor='green', alpha=.5)
+        plt.vlines(state_changes, 0, 0.7, colors='r', linestyles='--')
+        
+        plt.savefig("zs")
         plt.show()
 
-        plt.plot(x, y, label="positions", linestyles="--")
+
+        plt.plot(x, y, label="Trajectory")
         edges = np.asarray(robot.edges)
-        plt.scatter(edges[:,0], edges[:,1], marker="o", label="Edges")
-        plt.scatter(robot.goal[0], robot.goal[1], marker="x")
+        if len(edges)>=2: 
+            plt.scatter(edges[:,0], edges[:,1], marker="o", label=f"{len(edges)} Edges", color="g")
+            plt.scatter( np.mean(edges[0:2], axis=0)[0],  np.mean(edges[0:2], axis=0)[1], marker="x", color="g")
+           
+        plt.scatter(robot.goal[0], robot.goal[1], marker="x", color="r")
         plt.xlabel("X [m]")
         plt.ylabel("Y [m]")
         plt.legend()
+        plt.savefig("Trajectory")
         plt.show()
