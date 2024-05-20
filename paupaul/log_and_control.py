@@ -36,6 +36,7 @@ from cflib.utils import uri_helper
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils.multiranger import Multiranger
+import math
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
@@ -153,16 +154,42 @@ from simple_pid import PID
 
 
 
-def snake_creation():
-    goal_list = []
-    for i in range(10, 30, +3): 
-        if i % 2 ==1:               # must be 4 to be correct 
-            for j in range(2, 28, +3):
-                goal_list.append((i,j))
-        if i % 2 == 0:
-            for j in range(29, 2, -3):
-                goal_list.append((i,j))
-    return goal_list
+
+def control_law(dx, dy, current_yaw, goal_dist):
+    kp_yaw = 0.5
+    kp_pos = 0.22  # 0.5 : chao, 0.3 marche
+    kd = 0
+    max_speed = 1
+    # Calculate desired yaw angle
+    desired_yaw = math.atan2(dx, dy)
+
+    # Calculate yaw rate command
+    yaw_rate = kp_yaw * (desired_yaw - current_yaw)
+
+    # Limit yaw rate to a maximum value
+    max_yaw_rate = math.pi / 4  # Example maximum yaw rate (45 degrees per second)
+    yaw_rate = max(-max_yaw_rate, min(max_yaw_rate, yaw_rate))
+
+    # Calculate velocity commands
+    dpos = np.array([dx, dy])
+    v_word = kp_pos * dpos / goal_dist #normalize
+    
+    vel_rot_mat = np.array(
+            [
+                [np.cos(-current_yaw), -np.sin(-current_yaw)],
+                [np.sin(-current_yaw), np.cos(-current_yaw)],
+            ]
+        )
+    vx_body, vy_body = np.dot(vel_rot_mat, [v_word[0], v_word[1]])
+
+    # vel_x = kp_pos * dx/goal_dist #normalize
+    # vel_y = kp_pos * dy/goal_dist
+
+    # Limit velocity commands to maximum speed
+    vx_body = max(-max_speed, min(max_speed, vx_body))
+    vy_body = max(-max_speed, min(max_speed, vy_body))
+
+    return vx_body, vy_body, yaw_rate
 
 
 # Control from the exercises
@@ -236,14 +263,11 @@ def path_to_command(path,sensor_data,dt):
             # print("FIN")
             end_path = True
             index_current_goal_path = 0
-            
-        
-
 
             return control_command
-        
 
     return control_command
+
 
 if __name__ == '__main__':
 
@@ -289,7 +313,6 @@ if __name__ == '__main__':
     res_pos = 0.1 # meter
     height_desired = 1.0
 
-
     x_init = 0
     x_end = 0
     delta_pad = 0 
@@ -298,7 +321,6 @@ if __name__ == '__main__':
     starting_edge = False
     ending_edge = False
     kill_motor = False
-     
 
     while robot.alive:
 
@@ -309,6 +331,34 @@ if __name__ == '__main__':
         # print(le.sensor_data["range.right"])
         # print(le.sensor_data["range.front"])
         # print(le.sensor_data["range.back"]) 
+
+        time.sleep(0.01)
+
+        robot.update(le.sensor_data, 0.01)
+            
+        vx, vy, z, yaw_rate = robot.state_update()
+
+        # print("range front :", le.sensor_data["range.front"])
+            # 
+        # if kill_motor == False:
+        #     vx, vy, z, yaw_rate = robot.state_update()
+        # vz = -(le.sensor_data["stateEstimate.z"] - z)
+        # print(le.sensor_data["stateEstimate.z"])
+        # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
+        # print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
+        # print("command", [vx, vy, z, yaw_rate])
+        # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
+        # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
+
+        # if ending_edge == False : 
+        
+        cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
+      
+    cf.commander.send_stop_setpoint()
+    cf.close_link()
+
+
+    
 #########################################################################
         # if case is None:
         #     case = "snake_following"
@@ -393,31 +443,3 @@ if __name__ == '__main__':
         #             print("z: ", le.sensor_data["stateEstimate.z"])
 
         # print(le.sensor_data["v.z"]) 
-
-        time.sleep(0.01)
-
-        robot.update(le.sensor_data, 0.01)
-            
-        vx, vy, z, yaw_rate = robot.state_update()
-
-        print("range front :", le.sensor_data["range.front"])
-            
-        # if kill_motor == False:
-        #     vx, vy, z, yaw_rate = robot.state_update()
-        # vz = -(le.sensor_data["stateEstimate.z"] - z)
-        # print(le.sensor_data["stateEstimate.z"])
-        # cf.commander.send_velocity_world_setpoint(vx, vy, vz , yaw_rate*np.pi/180)
-        # print("distance", [np.linalg.norm(robot.pos - x) for x in robot.obst])
-        # print("command", [vx, vy, z, yaw_rate])
-        # cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
-        # cf.commander.send_hover_setpoint(0, 0, yaw_rate*180/np.pi, z)
-
-        # if ending_edge == False : 
-        
-        cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
-      
-    
-
-    cf.commander.send_stop_setpoint()
-    cf.close_link()
-    

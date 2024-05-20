@@ -41,34 +41,60 @@ class Agent():
         self.prev_force = np.zeros((2,))
         self.goal_list = self.snake_creation()
         print("snake creation")
+        # plt.imshow(np.flip(occupancy_grid, 1),
+        #                cmap='binary', origin='lower')
+        # for cell in list_goal:
+        #     plt.plot(len(occupancy_grid[0])-1 -
+        #                 cell[1], cell[0], 'o', color='orange')
+        # plt.colorbar(label='Binary Map Value')
+        # plt.title('Binary Map')
+        # plt.xlabel('X')
+        # plt.ylabel('Y')
+        # plt.show()
     
 
     def snake_creation(self):
+        # goal_list = []
+        # for i in range(1, 2, +3): 
+            # if i % 2 ==1:               # must be 4 to be correct 
+            #     for j in range(2, 28, +3):
+            #         goal_list.append((i,j))
+            # if i % 2 == 0:
+            #     for j in range(29, 2, -3):
+            #         goal_list.append((i,j))
+
+
+        # goal_list.append((1,1))
+        # goal_list.append((1,0.7))
+        # goal_list.append((1,0.4))
+        # goal_list.append((1,0.1))
+        # goal_list.append((2,0.1))
+        # goal_list.append((2,0.4))
+        # goal_list.append((2,0.7))
+        # goal_list.append((2,1))
+        # print("goal list :", goal_list)
+
+        ###################
+
         goal_list = []
-        # for i in range(10, 30, +3): 
-        #     # if i % 2 ==1:               # must be 4 to be correct 
-        #     #     for j in range(2, 28, +3):
-        #     #         goal_list.append((i,j))
-        #     # if i % 2 == 0:
-        #     #     for j in range(29, 2, -3):
-        #     #         goal_list.append((i,j))
-        #     if i % 2 ==1:               # must be 4 to be correct 
-        #         for j in range(2, 8, +3):
-        #             goal_list.append((i,j))
-        #     if i % 2 == 0:
-        #         for j in range(9, 2, -3):
-        #             goal_list.append((i,j))
+        width = 1  # Width of the area in meters
+        height = 2  # Height of the area in meters
+        step_size = 0.3  # Step size in meters
 
-        goal_list.append((1,1))
-        goal_list.append((1,1.3))
-        goal_list.append((1,1.6))
-        goal_list.append((1,1.9))
-        goal_list.append((2,1.9))
-        goal_list.append((2,1.6))
-        goal_list.append((2,1.3))
-        goal_list.append((2,1))
+        rows = int(height / step_size)
+        cols = int(width / step_size)
+        
+        for i in range(rows):
+            if i % 2 == 0:
+                # Move right for even rows
+                for j in range(cols):
+                    goal_list.append((i * step_size, j * step_size))
+            else:
+                # Move left for odd rows
+                for j in range(cols - 1, -1, -1):
+                    goal_list.append((i * step_size, j * step_size))
+
         print("goal list :", goal_list)
-
 
         return goal_list
 
@@ -139,27 +165,19 @@ class Agent():
         # self.goal = self.starting_pos + np.array([4,0])
         # self.goal = np.array([2, 0])
         self.goal = self.goal_list[self.idx_goal]
+        print("idx : ", self.idx_goal)
 
 
         control_command = self.go_to()
         return control_command
     
     def go_to(self):
-        
+        # print("state : ", self.state)
         dp = self.goal-self.pos
         d = np.linalg.norm(dp)
         # print("d : ", d)
 
-        if d < 0.1:
-            self.idx_goal += 1
-            print(" idx increament, go to next goal ")
-            print( " goal :", self.goal)
-            print("next goal :", self.goal[self.idx_goal])
-            print("state : ", self.state)
-            if self.idx_goal == len(self.goal_list):
-                print("end path")
-                return control_command
-
+        
             # else :
             #     self.state = FIND_LANDING
             #     [0.0, 0.0, self.z_target, 0]
@@ -195,8 +213,23 @@ class Agent():
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
                        # roll/pitch/yaw_Rate/thrust
- 
+    
+        if d < 0.1:
+                print("goal reached")
+                if self.idx_goal == len(self.goal_list):
+                    # print("end path")
+                    control_command = self.land()
+                    return control_command 
+                else :
+                    # print(" idx increament, go to next goal ")
+                    # print( " goal :", self.goal)
+                    self.idx_goal += 1
+                    # print("next goal :", self.goal_list[self.idx_goal])
+                    return control_command
+   
         return control_command
+
+        
         
     def repulsion_force(self, pos):
         
@@ -214,6 +247,13 @@ class Agent():
             f -= force * (do/d)
             
         return f
+    def land(self):
+        # print("on ground")
+        if self.sensor_data["range_down"] < 0.5:
+            return [0.0, 0.0, 0.0, 0.0]
+
+        else :
+            return [0.0, 0.0, 0.4, 0.0]
     
     # def force_filter(self, force):
     #     tau = 0.25
