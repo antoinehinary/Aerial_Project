@@ -1,0 +1,170 @@
+# Occupancy map based on distance sensor
+
+
+def _get_movements_4n():
+    """
+    Get all possible 4-connectivity movements (up, down, left right).
+    :return: list of movements with cost [(dx, dy, movement_cost)]
+    """
+    return [(1, 0, 1.0),
+            (0, 1, 1.0),
+            (-1, 0, 1.0),
+            (0, -1, 1.0)]
+
+def _get_movements_8n():
+    """
+    Get all possible 8-connectivity movements. Equivalent to get_movements_in_radius(1)
+    (up, down, left, right and the 4 diagonals).
+    :return: list of movements with cost [(dx, dy, movement_cost)]
+    """
+    s2 = math.sqrt(2)
+    return [(1, 0, 1.0),
+            (0, 1, 1.0),
+            (-1, 0, 1.0),
+            (0, -1, 1.0),
+            (1, 1, s2),
+            (-1, 1, s2),
+            (-1, -1, s2),
+            (1, -1, s2)]
+
+def A_Star_function(start, goal, occupancy_grid):
+    
+    # Dimensions of the occupancy grid
+    x_dim = occupancy_grid.shape[0]  
+    y_dim = occupancy_grid.shape[1]  
+
+    # Get all the possible components of the occupancy_grid matrix
+    x,y = np.mgrid[0:x_dim:1, 0:y_dim:1]
+    pos = np.empty(x.shape + (2,))
+    pos[:, :, 0] = x
+    pos[:, :, 1] = y # superimpose x and y
+    pos = np.reshape(pos, (x.shape[0]*x.shape[1], 2))
+    coords = list([(int(x[0]), int(x[1])) for x in pos])
+
+    # Define the heuristic, here = distance to goal ignoring obstacles
+    h = np.linalg.norm(pos - goal, axis=-1)
+    # Calculate the total heuristic for each cell
+
+    h = dict(zip(coords, h))
+
+    # check errors :
+    # Check if the start and goal are within the boundaries of the map
+    for point in [start, goal]:
+        assert point[0]>=0 and point[0]<occupancy_grid.shape[0],"start or end goal not contained in the map"
+        assert point[1]>=0 and point[1]<occupancy_grid.shape[1],"start or end goal not contained in the map"
+    
+    # check if start and goal nodes correspond to free spaces
+    # if occupancy_grid[start[0], start[1]]:
+    #     print("start:", start[0], start[1])
+    #     raise Exception('Start node is not traversable')
+
+    if occupancy_grid[goal[0], goal[1]]:
+        raise Exception('Goal node is not traversable')
+    #run A* algorithm
+    path, visitedNodes = A_Star(start, goal, h, coords, occupancy_grid)
+    #print("path", path)
+
+    return path, visitedNodes
+
+def filtered_path(path, occupancy_grid):
+    if len(path) < 2:
+        return path
+
+    new_filtered_tab = [path[0]]
+    prec_dx, prec_dy = path[1][0]- path[0][0] , path[1][1] - path[0][1]
+
+    for i in range(1, len(path) - 1):
+        point = path[i]
+        next_point = path[i + 1]
+        dx, dy = next_point[0] - point[0], next_point[1] - point[1]
+
+        if is_near_obstacle(occupancy_grid, point):
+            new_filtered_tab.append(point)
+            prec_dx, prec_dy = dx, dy
+            continue
+
+        if dx != prec_dx or dy != prec_dy:
+            new_filtered_tab.append(point)
+            prec_dx, prec_dy = dx, dy
+
+    new_filtered_tab.append(path[-1])
+
+    return new_filtered_tab
+
+
+# Control from the exercises
+index_current_goal_path = 0
+end_path = False
+land_on_ground = False
+end = False
+def path_to_command(path,sensor_data,dt):
+    global on_ground, height_desired, index_current_goal_path, timer, timer_done, startpos, end_path #, start_blocked
+    global try_1, try_2, look_for_landing, try_3, try_4, case, land_on_ground, home, end
+    # Start timer
+    if (index_current_goal_path == 1) & (timer is None):
+        timer = 0
+        # print("Time recording started")
+    if timer is not None:
+        timer += dt
+    # Hover at the final setpoint
+    if index_current_goal_path == len(path):
+        # Uncomment for KF
+        ##control_command = [startpos[0], startpos[1], startpos[2]-0.05, 0.0]
+        control_command = [0.0, 0.0, height_desired, 0.0]
+        if timer_done is None:
+            timer_done = True
+            # print("Path planing took " + str(np.round(timer,1)) + " [s]")
+        return control_command
+
+
+    # Get the goal position and drone position
+    current_goal = path[index_current_goal_path]
+    x_drone, y_drone, z_drone, yaw_drone = sensor_data['x_global'], sensor_data['y_global'], sensor_data['range_down'], sensor_data['yaw']
+    distance_drone_to_goal = np.linalg.norm([current_goal[0] - x_drone, current_goal[1] - y_drone])
+    dx= current_goal[0] - x_drone
+    dy= current_goal[1] - y_drone
+
+    vx, vy, r = control_law(dx, dy, yaw_drone, distance_drone_to_goal)
+    control_command = [vx, vy, height_desired, r]
+
+
+    if(look_for_landing):
+        # print("entre ")
+        if distance_drone_to_goal < 0.02:
+
+            if sensor_data['z_global'] - sensor_data['range_down'] > 0.05 :
+                control_command = [0.0, 0.0, 0.0, 0.0]
+                # print("LANDING")
+                look_for_landing = False
+                land_on_ground = True
+                #case ="stabilization_go_home"
+            else:
+                # print("change of case")
+                control_command = [0.0, 0.0, height_desired, 0.0]
+
+
+    # When the drone reaches the goal setpoint, e.g., distance < 0.1m
+    elif distance_drone_to_goal < 0.1:
+        # Select the next setpoint as the goal position 
+        index_current_goal_path += 1
+        # print("lenght path ", len(path))
+        # print("index_current_goal_path ", index_current_goal_path)
+        # Hover at the final setpoint
+        if index_current_goal_path == len(path):
+            if(home and index_current_goal_path == len(path)):
+                # print("fin path home")
+                control_command = [0.0, 0.0, 0.0, 0.0]
+                end = True 
+            control_command = [0.0, 0.0, height_desired, 0.0]
+            # print("FIN")
+            end_path = True
+            index_current_goal_path = 0
+            
+        
+
+
+            return control_command
+        
+
+    return control_command
+

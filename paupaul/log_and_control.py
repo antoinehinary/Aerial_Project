@@ -326,14 +326,14 @@ if __name__ == '__main__':
     kill_motor = False
 
 
-    def plot_thread():
-        robot.show_plot()
+    # def plot_thread():
+    #     robot.show_plot()
 
-    def on_key_event(event):
-        if event.name == 'p':  # Check if the 'p' key is pressed
-            threading.Thread(target=plot_thread).start()
+    # def on_key_event(event):
+    #     if event.name == 'p':  # Check if the 'p' key is pressed
+    #         threading.Thread(target=plot_thread).start()
 
-    keyboard.on_press(on_key_event)
+    # keyboard.on_press(on_key_event)
 
     while robot.alive:
         
