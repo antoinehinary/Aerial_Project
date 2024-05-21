@@ -1,5 +1,11 @@
 ## AGENT
 import numpy as np
+import matplotlib.pyplot as plt
+import keyboard
+import math
+import matplotlib.colors as colors
+from skimage.morphology import binary_dilation, square
+
 
 # STATES
 ARISE = 0
@@ -31,15 +37,23 @@ class Agent():
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
-        self.z_target = 0.6
+        self.z_target = 0.4
         self.idx_goal = 0
 
-        
+        self.min_x, self.max_x = 0, 5.0 # meter
+        self.min_y, self.max_y = 0, 3.0 # meter
+        self.range_max = 2.0 # meter, maximum range of distance sensor
+        self.res_pos = 0.1 # meter
+        self.conf = 0.2 # certainty given by each measurement
+        self.t = 0 # only for plotting
+        self.map = np.zeros((int((self.max_x-self.min_x)/self.res_pos), int((self.max_y-self.min_y)/self.res_pos))) # 0 = unknown, 1 = free, -1 = occupied
+
+
         self.update(sensor_data, dt)
         self.starting_pos = np.copy(self.pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
         self.prev_force = np.zeros((2,))
-        self.goal_list = self.snake_creation()
+        self.goal_list_grid = self.snake_creation()
         print("snake creation")
         # plt.imshow(np.flip(occupancy_grid, 1),
         #                cmap='binary', origin='lower')
@@ -54,28 +68,118 @@ class Agent():
     
 
     def snake_creation(self):
+        ## meter :
+        # goal_list = []
+        # width = 2  # Width of the area in meters
+        # height = 3  # Height of the area in meters
+        # step_size = 0.5  # Step size in meters
 
-        goal_list = []
-        width = 1  # Width of the area in meters
-        height = 2  # Height of the area in meters
-        step_size = 0.3  # Step size in meters
-
-        rows = int(height / step_size)
-        cols = int(width / step_size)
+        # rows = int(height / step_size)
+        # cols = int(width / step_size)
         
-        for i in range(rows):
-            if i % 2 == 0:
-                # Move right for even rows
-                for j in range(cols):
-                    goal_list.append((i * step_size, j * step_size))
-            else:
-                # Move left for odd rows
-                for j in range(cols - 1, -1, -1):
-                    goal_list.append((i * step_size, j * step_size))
+        # for i in range(rows):
+        #     if i % 2 == 0:
+        #         # Move right for even rows
+        #         for j in range(cols):
+        #             goal_list.append((i * step_size, j * step_size))
+        #     else:
+        #         # Move left for odd rows
+        #         for j in range(cols - 1, -1, -1):
+        #             goal_list.append((i * step_size, j * step_size))
 
+        # print("goal list :", goal_list)
+
+        ## using occupancy_map :
+        goal_list = []
+        # for i in range(0, 20, +3): 
+        #     if i % 2 ==1:               # must be 4 to be correct 
+        #         for j in range(2, 18, +3):
+        #             goal_list.append((i,j))
+        #     if i % 2 == 0:
+        #         for j in range(18, 2, -3):
+        #             goal_list.append((i,j))
+        #  [(0, 0.5), (0 , 1), (0.5, 1 ),(0.5, 0.5), (0.5, 0), (1, 0), (1, 0.5), (1,1), (1.5,1), (1.5, 0.5), (1.5,0)]
+        
+        goal_list = [(0, 5.0), (0, 10), (5.0, 10), (5.0, 5.0), (5.0, 0), (10, 0), (10, 5.0), (10, 10), (15.0, 10), (15.0, 5.0), (15.0, 0)]
         print("goal list :", goal_list)
-
         return goal_list
+
+
+
+    def occupancy_map(self, map):
+        pos_x = self.sensor_data["stateEstimate.x"]
+        pos_y = self.sensor_data["stateEstimate.y"]
+        yaw = self.sensor_data["stabilizer.yaw"]
+        
+        for j in range(4): # 4 sensors
+            yaw_sensor = yaw + j*np.pi/2 #yaw positive is counter clockwise
+            if j == 0:
+                measurement = self.sensor_data["range.front"]
+            elif j == 1:
+                measurement = self.sensor_data["range.left"]
+            elif j == 2:
+                measurement = self.sensor_data["range.back"]
+            elif j == 3:
+                measurement = self.sensor_data["range.right"]
+            
+            for i in range(int(self.range_max/self.res_pos)): # range is 2 meters
+                dist = i*self.res_pos
+                idx_x = int(np.round((pos_x - self.min_x + dist*np.cos(yaw_sensor))/self.res_pos,0))
+                idx_y = int(np.round((pos_y - self.min_y + dist*np.sin(yaw_sensor))/self.res_pos,0))
+
+                # make sure the current_setpoint is within the map
+                if idx_x < 0 or idx_x >= map.shape[0] or idx_y < 0 or idx_y >= map.shape[1] or dist > self.range_max:
+                    break
+
+                # update the map
+                if dist < measurement:
+                    map[idx_x, idx_y] += self.conf
+                else:
+                    map[idx_x, idx_y] -= self.conf
+                    break
+        
+        map = np.clip(map, -1, 1) # certainty can never be more than 100%
+
+            # only plot every Nth time step (comment out if not needed)
+            # flip the map at bottom left corner to match the coordinate system of matplotlib to pot
+            # if t % 50 == 0:
+            #     plt.imshow(np.flip(map,1), vmin=-1, vmax=1, cmap='gray', origin='lower') # flip the map to match the coordinate system
+            #     plt.savefig("map.png")
+            #     plt.close()
+            # t +=1
+
+        # self.map[self.map > 1] = 0
+        # # Replace all values <= 0 with 1
+        # self.map[self.map <= 0] = 1
+
+        # occupancy_grid = binary_dilation(map < - 0.1, square(3))
+        map = np.where(map < 0, 1, 0)
+        
+        return map
+
+
+
+    # Define the function to show the plot
+    def show_plot(self):
+        print("map :", self.map)
+        plt.imshow(np.flip(self.map, 1),
+                        cmap='binary', origin='lower')
+        for cell in self.goal_list_grid:
+            plt.plot(len(self.map[0])-1 -
+                        cell[1], cell[0], 'o', color='orange')
+        plt.colorbar(label='Binary Map Value')
+        plt.title('Binary Map')
+        plt.xlabel('X')
+        plt.ylabel('Y')
+        plt.show()
+
+    def grid2meters(self, path):
+        new_path = []
+        for cell in path:
+            x = round(cell[0] * self.res_pos + self.min_x, 2)
+            y = round(cell[1] * self.res_pos + self.min_y, 2)
+            new_path.append((x, y))
+        return new_path
 
 
     def update(self, sensor_data, dt):
@@ -87,9 +191,10 @@ class Agent():
         
         self.height = sensor_data['stateEstimate.z']
         self.yaw = sensor_data['stabilizer.yaw']*np.pi/180
+
         
     def state_update(self):
-        
+        self.map = self.occupancy_map(self.map)
         self.update_obstacles()
         
         if self.state == ARISE:
@@ -105,6 +210,7 @@ class Agent():
             control_command = 4*[0]
         
         return control_command
+        
     
     def update_obstacles(self):
 
@@ -132,20 +238,13 @@ class Agent():
                 self.next_state = FIND_STARTING
             return self.state_update()
         
-    # def send_velocity_world_setpoint(self, vx, vy, vz, yawrate):
-    #     """
-    #     Send Velocity in the world frame of reference setpoint with yawrate commands
-
-    #     vx, vy, vz are in m/s
-    #     yawrate is in degrees/s
-
         
     def find_landing(self):
         
         # self.goal = self.starting_pos + np.array([4,0])
         # self.goal = np.array([2, 0])
+        self.goal_list = self.grid2meters(self.goal_list_grid)
         self.goal = self.goal_list[self.idx_goal]
-        print("idx : ", self.idx_goal)
 
 
         control_command = self.go_to()
@@ -204,7 +303,13 @@ class Agent():
                     # print(" idx increament, go to next goal ")
                     # print( " goal :", self.goal)
                     self.idx_goal += 1
+                    print("idx : ", self.idx_goal)
                     # print("next goal :", self.goal_list[self.idx_goal])
+
+
+                    # while self.map[self.goal_list[self.idx_goal]] != 0:
+                    #     self.idx_goal += 1
+
                     return control_command
    
         return control_command
@@ -227,6 +332,7 @@ class Agent():
             f -= force * (do/d)
             
         return f
+    
     def land(self):
         # print("on ground")
         if self.sensor_data["range_down"] < 0.5:

@@ -37,6 +37,9 @@ from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
 from cflib.positioning.motion_commander import MotionCommander
 from cflib.utils.multiranger import Multiranger
 import math
+import keyboard
+import threading
+
 
 uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 HEIGHT_COEFF = 100
@@ -297,7 +300,7 @@ if __name__ == '__main__':
     #     Send Velocity in the world frame of reference setpoint with yawrate commands
 
     #     vx, vy, vz are in m/s
-    #     yawrate is in degrees/s
+    #     yawrate is in degrees/sp
     
     # The Crazyflie lib doesn't contain anything to keep the application alive,
     # so this is where your application should do something. In our case we 
@@ -306,7 +309,7 @@ if __name__ == '__main__':
     diff_height_vect = []
     i=0
     goal_idx = 0
-    case = "snake_following"
+    # case = "snake_following"
 
     min_x, max_x = 0, 5.0 # meter
     min_y, max_y = 0, 3.0 # meter
@@ -322,19 +325,30 @@ if __name__ == '__main__':
     ending_edge = False
     kill_motor = False
 
-    while robot.alive:
 
+    def plot_thread():
+        robot.show_plot()
+
+    def on_key_event(event):
+        if event.name == 'p':  # Check if the 'p' key is pressed
+            threading.Thread(target=plot_thread).start()
+
+    keyboard.on_press(on_key_event)
+
+    while robot.alive:
+        
         if is_close(le.sensor_data["range.up"]):
             break
 
         # print(le.sensor_data["range.left"])
         # print(le.sensor_data["range.right"])
-        # print(le.sensor_data["range.front"])
+        # print(le.sensor_data["range.frppont"])
         # print(le.sensor_data["range.back"]) 
 
         time.sleep(0.01)
 
         robot.update(le.sensor_data, 0.01)
+       
             
         vx, vy, z, yaw_rate = robot.state_update()
 
@@ -342,7 +356,7 @@ if __name__ == '__main__':
         
         # if ending_edge == False : 
         
-        cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
+        cf.commander.send_hover_setpoint(vx , vy, 0.1, z)
       
     cf.commander.send_stop_setpoint()
     cf.close_link()
