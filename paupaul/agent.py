@@ -154,8 +154,8 @@ class Agent():
 
                 if len(self.edges) == 1:
                     dp = self.goal-self.pos
-                    dp /= np.linalg.norm(dp) + 0.00001
-                    self.goal = self.pos + 2*dp
+                    dp /= np.linalg.norm(dp) + 0.00001 ## prevent 0 division
+                    self.goal = self.pos + 2*dp ## new goal 2 meters forward
 
                     if verbose: print("First edge detected")
             case 1:
@@ -167,7 +167,6 @@ class Agent():
                     self.mean_toggle = True # for the case 2
                     
                     if verbose: print("Second edge detected")
-
             case 2:                
                 if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.03:
                     de = self.edges[1]-self.edges[0]
@@ -195,7 +194,6 @@ class Agent():
                 if len(self.edges) == 4:
                     
                     edges = np.asarray(self.edges)
-                    
                     self.goal = 0.5*(np.min(edges, axis=0) + np.max(edges, axis=0))
                     
                     if verbose: print("Fourth edge detected")
@@ -208,7 +206,6 @@ class Agent():
                     if verbose: print("Arrived at estimated center")
 
                     control_command = self.state_update()
-                
                     return control_command                
             case _:
                 print("Wrong number of edges")
@@ -224,7 +221,7 @@ class Agent():
     def go_to(self, avoid_obstacles=False):
         
         dp = self.goal-self.pos
-        d = np.linalg.norm(dp)+0.0001 ## no 0 allowed
+        d = np.linalg.norm(dp)+0.0001 ## prevent 0 division
        
         force = 0.4*dp/d
         
@@ -235,16 +232,12 @@ class Agent():
         ## reduce the speed if trying to find edges
         if self.state == FIND_LANDING and len(self.edges): force /= 2
 
+        ## reduce speed
         d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
-        v_des = force * np.clip(d_min/0.3, 0, 1)
-        
+        v_des = force * np.clip(d_min/0.3, 0.05/0.4, 1) ## max_dist, min_speed, (max_speed)
 
-        
         v = rotmat(-self.yaw) @ v_des
-        
-        # z = self.z_target + self.z_pid(self.sensor_data['stateEstimate.vz'])
         z = self.z_target
-
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
  
