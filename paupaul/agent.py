@@ -82,7 +82,7 @@ class Agent():
             control_command = self.arise()
             
         elif self.state == LAND:
-            control_command = 4*[0]
+            control_command = self.land()
 
         elif self.state == FIND_LANDING:
             control_command = self.find_landing()
@@ -105,22 +105,33 @@ class Agent():
             v_des = self.starting_pos - self.pos
             v = rotmat(-self.yaw) @ v_des
             z = np.clip(self.z_target, a_min=None, a_max=self.height+0.3)
-            yaw = np.clip(self.height, a_min=0, a_max=0.5)
+            # yaw = np.clip(self.height, a_min=0, a_max=0.5)
             
+            yaw = 0
+    
             control_command = [v[0], v[1], z, yaw]
             return control_command
         
         else:
-            self.state = FIND_LANDING
-            self.commander_busy = False
-            # if self.state == FIND_LANDING:
-            #     self.state = LAND
-            #     self.next_state = LAND
-            #     self.events.append([""])
-            # else:
-            #     self.state = np.copy(self.next_state)
-            #     self.next_state = FIND_STARTING
+            self.state = self.next_state
             return self.state_update()
+    
+    def land(self):
+        
+        if self.height > 0.05:
+            v_des = self.goal - self.pos
+            v = rotmat(-self.yaw) @ v_des
+            
+            z = np.clip(self.height - 0.1, a_min=0., a_max=None)            
+            yaw = 0
+    
+            control_command = [v[0], v[1], z, yaw]
+            return control_command
+        
+        else:
+            self.alive = False
+            control_command = [0,0,0,0]
+            return control_command
     
     def detect_edge(self):
         
@@ -158,7 +169,7 @@ class Agent():
                     if verbose: print("Second edge detected")
 
             case 2:                
-                if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.02:
+                if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.03:
                     de = self.edges[1]-self.edges[0]
                     de /= np.linalg.norm(de)
                     self.goal = self.pos + 1.5*0.3*np.array(-de[1], de[0])
@@ -171,24 +182,36 @@ class Agent():
                     self.detect_edge()
                     
                     if len(self.edges) == 3:
-                    
-                        self.goal = find_landing_pos(self.edges)
-
-                        print("Goal:", self.goal)
+                        
+                        de = self.edges[1]-self.edges[0]
+                        de /= np.linalg.norm(de)
+                        self.goal = self.pos + 1.5*0.3*np.array(de[1], -de[0])
                
                         if verbose: print("Third edge detected")
                     
             case 3:
-                if np.linalg.norm(self.pos - self.goal) < 0.04:
-                    self.alive = False
-                    control_command = [0, 0, self.z_target, 0] # last command
+                self.detect_edge()
+                
+                if len(self.edges) == 4:
                     
-                    if verbose: print("Arrived at pseudo-center")
-                    self.alive = False
+                    edges = np.asarray(self.edges)
                     
-                    return control_command
+                    self.goal = 0.5*(np.min(edges, axis=0) + np.max(edges, axis=0))
+                    
+                    if verbose: print("Fourth edge detected")
+                    
+            case 4:
+                if np.linalg.norm(self.pos - self.goal) < 0.03:
+                    self.state = LAND
+                    self.next_state = FIND_STARTING
+                    
+                    if verbose: print("Arrived at estimated center")
+
+                    control_command = self.state_update()
+                
+                    return control_command                
             case _:
-                print("Too many edges")
+                print("Wrong number of edges")
                 self.alive = False
                 
         if len(self.edges):
