@@ -14,6 +14,7 @@ LAND = 1
 
 FIND_LANDING = 2
 FIND_STARTING = 3
+GO_HOME = 4
 
 def direction_vector(theta):
     return np.array([np.cos(theta), np.sin(theta)])
@@ -38,7 +39,7 @@ class Agent():
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
-        self.z_target = 0.4
+        self.z_target = 0.3
         self.idx_goal = 0
 
         self.min_x, self.max_x = 0, 5.0 # meter
@@ -102,14 +103,27 @@ class Agent():
         # print("goal list :", goal_list)
 
         ## using occupancy_map :
+
+        ##############################################################
+        # goal_list = []
+        # for i in range(37, 50, +3): 
+        #     if i % 2 ==1:               # must be 4 to be correct 
+        #         for j in range(2, 29, +3):
+        #             goal_list.append((i,j))
+        #     if i % 2 == 0:
+        #         for j in range(29, 2, -3):
+        #             goal_list.append((i,j))
+        ################################################################
+
         goal_list = []
         for i in range(37, 50, +3): 
             if i % 2 ==1:               # must be 4 to be correct 
-                for j in range(2, 29, +3):
+                for j in range(2, 19, +3):
                     goal_list.append((i,j))
             if i % 2 == 0:
-                for j in range(29, 2, -3):
+                for j in range(19, 2, -3):
                     goal_list.append((i,j))
+
         #  [(0, 0.5), (0 , 1), (0.5, 1 ),(0.5, 0.5), (0.5, 0), (1, 0), (1, 0.5), (1,1), (1.5,1), (1.5, 0.5), (1.5,0)]
         
         # goal_list = [(0, 5.0), (0, 10), (5.0, 10), (5.0, 5.0), (5.0, 0), (10, 0), (10, 5.0), (10, 10), (15.0, 10), (15.0, 5.0), (15.0, 0)]
@@ -237,8 +251,6 @@ class Agent():
             new_path.append((x, y))
         return new_path
 
-
-
         
     def state_update(self):
         self.map = self.occupancy_map(self.map)
@@ -246,6 +258,7 @@ class Agent():
         self.update_obstacles()
         
         if self.state == ARISE:
+
             control_command = self.arise()
             
         elif self.state == LAND:
@@ -256,6 +269,9 @@ class Agent():
 
         elif self.state == FIND_STARTING:
             control_command = 4*[0]
+
+        elif self.state == GO_HOME:
+            control_command = self.go_home()
         
         return control_command
         
@@ -340,37 +356,18 @@ class Agent():
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
                        # roll/pitch/yaw_Rate/thrust
-        if d < 0.3 and min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) < 500:
-            print("goal skiped")
-            print("minuimum: ",  min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) )
-            if self.sensor_data["range.front"]  < 2250:
-                print("front")
-            if self.sensor_data["range.right"]  < 2250:
-                print("right")
-            if self.sensor_data["range.left"]  < 2250:
-                print("left")
-            if self.sensor_data["range.back"]  < 2250:
-                print("back")
-            if self.idx_goal == len(self.goal_list):
-                # print("end path")
-                control_command = self.land()
-                return control_command 
-            else :
-                # print(" idx increament, go to next goal ")
-                # print( " goal :", self.goal)
-                self.idx_goal += 1
-                # self.show_plot()
-                print("idx : ", self.idx_goal)
-                # print("next goal :", self.goal_list[self.idx_goal])
-
-
-                # while self.map[self.goal_list[self.idx_goal]] != 0:
-                #     self.idx_goal += 1
-
-                return control_command
-
-        if d < 0.1:
-                print("goal reached")
+        if self.state != GO_HOME:
+            if d < 0.3 and min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) < 500:
+                print("goal skiped")
+                print("minuimum: ",  min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) )
+                if self.sensor_data["range.front"]  < 2250:
+                    print("front")
+                if self.sensor_data["range.right"]  < 2250:
+                    print("right")
+                if self.sensor_data["range.left"]  < 2250:
+                    print("left")
+                if self.sensor_data["range.back"]  < 2250:
+                    print("back")
                 if self.idx_goal == len(self.goal_list):
                     # print("end path")
                     control_command = self.land()
@@ -388,7 +385,30 @@ class Agent():
                     #     self.idx_goal += 1
 
                     return control_command
-   
+
+            if d < 0.1:
+                    print("goal reached")
+                    if self.idx_goal == len(self.goal_list):
+                        # print("end path")
+                        control_command = self.land()
+                        return control_command 
+                    else :
+                        # print(" idx increament, go to next goal ")
+                        # print( " goal :", self.goal)
+                        self.idx_goal += 1
+                        # self.show_plot()
+                        print("idx : ", self.idx_goal)
+                        # print("next goal :", self.goal_list[self.idx_goal])
+
+
+                        # while self.map[self.goal_list[self.idx_goal]] != 0:
+                        #     self.idx_goal += 1
+
+                        return control_command
+        else :
+            if d < 0.1:
+                self.land()
+
         return control_command
 
         
@@ -411,12 +431,13 @@ class Agent():
         return f
     
     def land(self):
-        # print("on ground")
-        if self.sensor_data["range.down"] < 0.5:
+        print("go on ground")
+        if self.sensor_data['stateEstimate.z'] < 0.25:
+
             return [0.0, 0.0, 0.0, 0.0]
 
         else :
-            return [0.0, 0.0, 0.4, 0.0]
+            return [0.0, 0.0, 0.2, 0.0]
     
     # def force_filter(self, force):
     #     tau = 0.25
@@ -427,3 +448,10 @@ class Agent():
     #     filtered_force *= filter
     #     self.prev_force = force + filtered_force
     #     return force + filtered_force
+    
+    def go_home(self):
+        self.goal = (0,0)
+        control_command = self.go_to()
+        return control_command
+
+    

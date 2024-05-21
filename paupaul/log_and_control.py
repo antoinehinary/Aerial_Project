@@ -315,10 +315,12 @@ if __name__ == '__main__':
     min_y, max_y = 0, 3.0 # meter
     res_pos = 0.1 # meter
     height_desired = 1.0
+    avg_height = 0
 
     x_init = 0
     x_end = 0
     delta_pad = 0 
+    k = 100
 
     # Bool for landing pad search
     starting_edge = False
@@ -345,6 +347,33 @@ if __name__ == '__main__':
         # print(le.sensor_data["range.frppont"])
         # print(le.sensor_data["range.back"]) 
 
+        if le.sensor_data["stateEstimate.z"] > 0.15:
+            start_search = True
+
+        if start_search == True:
+            height_vect.append(le.sensor_data["stateEstimate.z"] * HEIGHT_COEFF)
+
+            # Manage height vector size
+            if i > 8:
+                height_vect.pop(0)
+            else:
+                i += 1
+
+            if i > 8:
+                for l in range(8):
+                    if l < 4:
+                        height_vect[l] = 0.3*height_vect[l]
+                    else:
+                        height_vect[l] = 0.7*height_vect[l]
+
+            avg_height = np.mean(height_vect)
+            print("ave_height :", avg_height)
+
+            # Detect starting edge
+            #diff_sum < 0 or 
+
+
+
         time.sleep(0.01)
 
         robot.update(le.sensor_data, 0.01)
@@ -352,6 +381,13 @@ if __name__ == '__main__':
             
         vx, vy, z, yaw_rate = robot.state_update()
 
+        if (avg_height > 12) and le.sensor_data["stateEstimate.x"] > 1:
+            vx, vy, z, yaw_rate = robot.land()
+            while(k > 0):
+                print("loop")
+                # cf.commander.send_stop_setpoint()
+                cf.commander.send_hover_setpoint(0 , 0, 0.1, le.sensor_data["stateEstimate.x"])
+                k -= 1
         # print("range front :", le.sensor_data["range.front"])
         
         # if ending_edge == False : 
