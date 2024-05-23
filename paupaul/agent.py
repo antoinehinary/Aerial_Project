@@ -118,10 +118,10 @@ class Agent():
         goal_list = []
         for i in range(37, 50, +3): 
             if i % 2 ==1:               # must be 4 to be correct 
-                for j in range(2, 19, +3):
+                for j in range(2, 29, +3):
                     goal_list.append((i,j))
             if i % 2 == 0:
-                for j in range(19, 2, -3):
+                for j in range(29, 2, -3):
                     goal_list.append((i,j))
 
         #  [(0, 0.5), (0 , 1), (0.5, 1 ),(0.5, 0.5), (0.5, 0), (1, 0), (1, 0.5), (1,1), (1.5,1), (1.5, 0.5), (1.5,0)]
@@ -389,7 +389,7 @@ class Agent():
             if d < 0.1:
                     print("goal reached")
                     if self.idx_goal == len(self.goal_list):
-                        # print("end path")
+                        print("end path")
                         control_command = self.land()
                         return control_command 
                     else :
@@ -405,9 +405,6 @@ class Agent():
                         #     self.idx_goal += 1
 
                         return control_command
-        else :
-            if d < 0.1:
-                self.land()
 
         return control_command
 
@@ -437,7 +434,7 @@ class Agent():
             return [0.0, 0.0, 0.0, 0.0]
 
         else :
-            return [0.0, 0.0, 0.2, 0.0]
+            return [0.0, 0.0, 0.2, 0.0] 
     
     # def force_filter(self, force):
     #     tau = 0.25
@@ -450,6 +447,7 @@ class Agent():
     #     return force + filtered_force
     
     def go_home(self):
+        self.state = GO_HOME
         self.goal = (0,0)
         control_command = self.go_to()
         return control_command
