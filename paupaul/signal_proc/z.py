@@ -15,6 +15,7 @@ index = np.argmax(hist[0:p[0], 2])
 
 pos = hist[index, 0:2]
 
+print(hist)
+print("Pos:", pos)
 plt.scatter(index, hist[index,2], marker='x', color='r')
-
 plt.show()

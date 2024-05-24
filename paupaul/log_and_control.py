@@ -234,7 +234,7 @@ if __name__ == '__main__':
         z_list = np.asarray(z_list)
         t = np.asarray(t) - t[0]
         keypressed = np.asarray(keypressed)
-        datapoints = np.asarray(robot.datapoints)
+        # datapoints = np.asarray(robot.datapoints)
 
         plt.subplot(1, 2, 1)
         plt.plot(t, vz)
@@ -251,21 +251,21 @@ if __name__ == '__main__':
         plt.fill_between(t, 0.5, where=keypressed, facecolor='green', alpha=.5)
         plt.vlines(state_changes, 0, 0.7, colors='r', linestyles='--')
 
+
         plt.savefig(os.path.join("paupaul", "logs", "zs"))
         plt.show()
 
         plt.plot(x, y, label="Trajectory")
         edges = np.asarray(robot.edges)
 
-        # print(f"There are {len(edges)} edges")
         plt.scatter(edges[:, 0], edges[:, 1], marker="o", label=f"{len(edges)} Edges", color="g")
-        plt.scatter(datapoints[:, 0], datapoints[:, 1], marker="+", label="Datapoints", color="pink")
+        # plt.scatter(datapoints[:, 0], datapoints[:, 1], marker="+", label="Datapoints", color="pink")
         plt.scatter(np.mean(edges[0:2], axis=0)[0],  np.mean(edges[0:2], axis=0)[1], marker="x", color="g")
-
         plt.scatter(robot.goal[0], robot.goal[1], marker="x", color="r")
         plt.xlabel("X [m]")
         plt.ylabel("Y [m]")
-        plt.legend()
+        # plt.legend()
+        plt.gca().set_aspect('equal', adjustable='box')
         plt.savefig(os.path.join("paupaul", "logs", "trajectory"))
         plt.show()
 
