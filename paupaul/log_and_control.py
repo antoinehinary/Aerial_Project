@@ -419,7 +419,7 @@ if __name__ == '__main__':
                 cf.commander.send_position_setpoint(x_landing_center, y_landing_center, z, 0)
                 if abs(x_landing_center - robot.pos[0]) < 0.01 and abs(y_landing_center - robot.pos[1]) < 0.01: 
                     cf.commander.send_hover_setpoint(0, 0, 0, z)
-                    landing_state = "END_EDGE_SEARCH"
+                    landing_state = "CENTER_DRONE"
                     print("END_EDGE_SEARCH")
                 
             elif landing_state == "END_EDGE_SEARCH" and le.sensor_data["stateEstimate.x"] > 1:
@@ -517,7 +517,9 @@ if __name__ == '__main__':
         else:
             if started == False : 
                 vx, vy, z, yaw_rate = robot.state_update()
-                cf.commander.send_hover_setpoint(vx , vy, yaw_rate, z)
+                # cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
+                cf.commander.send_hover_setpoint(vx , vy, 0, z)
+
       
     cf.commander.send_stop_setpoint()
     cf.close_link()

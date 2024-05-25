@@ -39,7 +39,7 @@ class Agent():
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
-        self.z_target = 0.5
+        self.z_target = 0.3
         self.idx_goal = 0
 
         self.min_x, self.max_x = 0, 5.0 # meter
@@ -118,10 +118,10 @@ class Agent():
         goal_list = []
         for i in range(37, 50, +3): 
             if i % 2 ==1:               # must be 4 to be correct 
-                for j in range(2, 29, +3):
+                for j in range(2, 26, +3):
                     goal_list.append((i,j))
             if i % 2 == 0:
-                for j in range(29, 2, -3):
+                for j in range(26, 2, -3):
                     goal_list.append((i,j))
 
         #  [(0, 0.5), (0 , 1), (0.5, 1 ),(0.5, 0.5), (0.5, 0), (1, 0), (1, 0.5), (1,1), (1.5,1), (1.5, 0.5), (1.5,0)]
@@ -330,7 +330,7 @@ class Agent():
         # obstacle dans pt :   
         # if d < 0.4 and 
 
-        force = 0.5*dp/d
+        force = 0.3*dp/d
         repulsion_force = self.repulsion_force(self.pos)
         
         # repulsion_force_prime = self.repulsion_force(self.pos+self.speed*self.dt)   
