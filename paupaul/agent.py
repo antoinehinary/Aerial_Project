@@ -218,7 +218,9 @@ class Agent():
             # self.pos_history.clear()
             # self.time_hist.clear()
             self.edges.append(pos)
-            self.goals = [self.pos]
+            dp = self.pos - pos
+            dp /= np.linalg.norm(dp)
+            self.goals = [self.pos + 0.1*dp]
 
     # def wait(self, t):
     #     self.stop_time = time.time() + t
@@ -252,17 +254,6 @@ class Agent():
         return control_command
 
     def go_to(self, avoid_obstacles=True):
-
-        # if self.waiting:
-        #     if time.time() - self.stop_time > 0:
-        #         self.waiting = False
-        #     else:
-        #         v_des = self.wait_pos - self.pos
-        #         v = rotmat(-self.yaw) @ v_des
-        #         z = self.z_target
-        #         yaw_rate = 0.5
-        #         control_command = [v[0], v[1], z, yaw_rate]
-        #         return control_command
 
         dp = self.goals[0]-self.pos
         d = np.linalg.norm(dp)+0.0001  # prevent 0 division
