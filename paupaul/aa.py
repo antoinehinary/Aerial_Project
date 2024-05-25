@@ -1,25 +1,26 @@
-
 import numpy as np
 import matplotlib.pyplot as plt
 
-edges = [np.array([0, 0]), np.array([0.5, 0.2]), np.array([1, 1])]
+def snake():
+    
+    layers_x = 4
+    layers_y = 13
+    dx = 0.2
+    dy = 0.2
+    start_p = np.array([3.2, 0.2])
 
-de = edges[1]-edges[0]
-print(de)
+    goal_list = []
 
-de /= np.linalg.norm(de)
+    for i in range(layers_x):
+        for j in range(layers_y):
+            if i % 2 == 0:
+                goal_list.append(start_p + np.array([i*dx, j*dy]))
+            else:
+                goal_list.append(start_p + np.array([i*dx, (layers_y-j-1)*dy]))
 
+    return goal_list
 
-mean = np.mean(edges[0:2], axis=0)
+goals = np.asarray(snake())
 
-goal = mean + np.array([de[1], -de[0]])
-
-edges = np.asarray(edges)
-
-plt.scatter(edges[:2,0], edges[:2,1])
-
-plt.scatter(mean[0], mean[1])
-
-plt.scatter(goal[0], goal[1])
-
-plt.show()
+plt.scatter(goals)
+plt.plot()

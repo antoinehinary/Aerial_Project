@@ -1,6 +1,5 @@
 # AGENT
 import numpy as np
-from scipy.optimize import minimize
 # from simple_pid import PID
 from collections import deque
 from scipy.signal import find_peaks
@@ -14,6 +13,62 @@ LAND = 1
 FIND_LANDING = 2
 FIND_STARTING = 3
 
+def return_snake(self):
+
+    w = 10
+    h = 3
+    dx = 0.3
+    dy = 0.3
+    p = self.pos + np.array([h/2*dx, -w/2*dy])
+
+    goal_list = []
+
+    for i in range(h):
+        for j in range(w):
+            if i % 2 == 0:
+                goal_list.append(p + np.array([i*dx, j*dy]))
+            else:
+                goal_list.append(p + np.array([i*dx, (w-j-1)*dy]))
+
+    return goal_list
+
+# def snake(self):
+    
+#     w = 10
+#     h = 3
+#     dx = 0.3
+#     dy = 0.3
+#     p = self.pos + np.array([h/2*dx, -w/2*dy])
+
+#     goal_list = []
+
+#     for i in range(h):
+#         for j in range(w):
+#             if i % 2 == 0:
+#                 goal_list.append(p + np.array([i*dx, j*dy]))
+#             else:
+#                 goal_list.append(p + np.array([i*dx, (w-j-1)*dy]))
+
+#     return goal_list
+
+def snake():
+    
+    layers_x = 4
+    layers_y = 13
+    dx = 0.2
+    dy = 0.2
+    start_p = np.array([3.2, 0.2])
+
+    goal_list = []
+
+    for i in range(layers_x):
+        for j in range(layers_y):
+            if i % 2 == 0:
+                goal_list.append(start_p + np.array([i*dx, j*dy]))
+            else:
+                goal_list.append(start_p + np.array([i*dx, (layers_y-j-1)*dy]))
+
+    return goal_list
 
 def direction_vector(theta):
     return np.array([np.cos(theta), np.sin(theta)])
@@ -28,25 +83,6 @@ def rotmat(theta):
     m = np.array([[np.cos(theta), -np.sin(theta)],
                   [np.sin(theta), np.cos(theta)]])
     return m
-
-
-def find_landing_pos(edges):
-
-    def objective(x, points):
-
-        distance = np.empty((len(points),))
-        for i, p in enumerate(points):
-            dp = p - x
-            distance[i] = np.linalg.norm(dp*(1-0.15/np.linalg.norm(dp)))
-
-        return np.sum(distance)
-
-    # Initial guess for the point x
-    x0 = np.array([0, 0])
-    # Minimize the objective function
-    result = minimize(objective, x0, args=(edges,))
-
-    return result.x
 
 
 class Agent():
@@ -65,7 +101,7 @@ class Agent():
         self.starting_pos = np.copy(self.pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
 
-        self.goals = [np.array([4, 0])]
+        self.goals = snake()
 
         self.datapoints = []
 
@@ -103,11 +139,25 @@ class Agent():
 
         return control_command
 
+    def goal_near(self):
+        sensors = ['range.front', 'range.left', 'range.back', 'range.right']
+        obstacles = [self.pos + self.sensor_data[sensor] *
+                     direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
+
+        for o in obstacles:
+            if np.linalg.norm(o-self.goals[0]) < 0.4: 
+                return True
+        
+        return False
+        
     def update_obstacles(self):
 
         sensors = ['range.front', 'range.left', 'range.back', 'range.right']
         obstacles = [self.pos + self.sensor_data[sensor] *
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
+        
+        while self.goal_near(): self.goals.pop(0)
+
         self.obst = sorted(np.concatenate([self.obst, obstacles], axis=0).tolist(),
                            key=lambda x: np.linalg.norm(x-self.pos))
         self.obst = np.asarray(self.obst)[0:4]  # keep only 4 nearest
@@ -152,10 +202,10 @@ class Agent():
 
         if len(p) == 1:
 
-            # index = info['left_bases'][0]
-            # pos = hist[index, 0:2]
+            index = info['left_bases'][0]
+            pos = hist[index, 0:2]
 
-            # self.datapoints.append(self.time_hist[index])
+            self.datapoints.append(self.time_hist[index])
             # self.datapoints.append(self.time_hist[info['right_bases'][0]])
 
             # self.edges.append(pos)
@@ -163,7 +213,7 @@ class Agent():
 
             # self.pos_history.clear()
             # self.time_hist.clear()
-
+            self.edges.append(pos)
             self.goals = [self.pos]
 
     # def wait(self, t):
@@ -212,6 +262,10 @@ class Agent():
 
         dp = self.goals[0]-self.pos
         d = np.linalg.norm(dp)+0.0001  # prevent 0 division
+
+        if self.state[-1] == FIND_LANDING and d < 0.1 and len(self.goals) > 1:
+            self.goals.pop(0)
+            return self.go_to() 
 
         force = 0.4*dp/d
 
