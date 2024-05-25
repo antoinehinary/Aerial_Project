@@ -138,7 +138,8 @@ class Agent():
             control_command = self.find_landing()
 
         elif self.state[-1] == FIND_STARTING:
-            control_command = [0, 0, self.z_target, 0]
+            self.goals = [self.starting_pos]
+            control_command = self.go_to()
 
         return control_command
 
@@ -147,9 +148,10 @@ class Agent():
         obstacles = [self.pos + self.sensor_data[sensor] *
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
 
-        for o in obstacles:
-            if np.linalg.norm(o-self.goals[0]) < 0.4:
-                return True
+        if self.state[-1] == FIND_LANDING:
+            for o in obstacles:
+                if np.linalg.norm(o-self.goals[0]) < 0.4:
+                    return True
 
         return False
 
@@ -168,7 +170,7 @@ class Agent():
 
     def arise(self):
 
-        if self.height < self.z_target:
+        if self.height < 0.9*self.z_target:
 
             # v_des = self.starting_pos - self.pos
             # v = rotmat(-self.yaw) @ v_des
@@ -196,6 +198,7 @@ class Agent():
 
         else:
             self.state.pop()
+            print(self.state[-1])
             return self.state_update()
 
     def detect_edge(self):
@@ -220,7 +223,7 @@ class Agent():
             self.edges.append(pos)
             dp = self.pos - pos
             dp /= np.linalg.norm(dp)
-            self.goals = [self.pos + 0.1*dp]
+            self.goals = [pos + 0.01*dp]
 
     # def wait(self, t):
     #     self.stop_time = time.time() + t
@@ -244,6 +247,7 @@ class Agent():
             case 1:
                 if np.linalg.norm(self.goals[0]-self.pos) < 0.02:
                     self.state.pop()
+                    print(self.state[-1])
                     return self.state_update()
 
         if len(self.edges):

@@ -265,7 +265,7 @@ if __name__ == '__main__':
         plt.scatter(edges[:, 0], edges[:, 1], marker="o", label=f"{len(edges)} Edges", color="g")
         # plt.scatter(datapoints[:, 0], datapoints[:, 1], marker="+", label="Datapoints", color="pink")
         plt.scatter(np.mean(edges[0:2], axis=0)[0],  np.mean(edges[0:2], axis=0)[1], marker="x", color="g")
-        plt.scatter(robot.goal[0], robot.goal[1], marker="x", color="r")
+        plt.scatter(robot.goals[0][0], robot.goals[0][1], marker="x", color="r")
         plt.xlabel("X [m]")
         plt.ylabel("Y [m]")
         # plt.legend()
