@@ -99,9 +99,9 @@ class Agent():
         self.time_hist = deque(maxlen=150)
 
         self.edges = []
+        self.starting_pos = np.copy(start_pos)
 
         self.update(sensor_data)
-        self.starting_pos = np.copy(start_pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
 
         self.goals = snake()
