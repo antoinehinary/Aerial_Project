@@ -176,7 +176,8 @@ if __name__ == '__main__':
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
 
-    robot = agent.Agent(le.sensor_data, 0.1)
+    start_pos = np.array([0.3,0.3])
+    robot = agent.Agent(le.sensor_data, start_pos)
     robot.update(le.sensor_data)
 
     t = []

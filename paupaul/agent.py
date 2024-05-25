@@ -55,8 +55,8 @@ def return_snake(self):
 
 def snake():
 
-    layers_x = 6
-    layers_y = 13
+    layers_x = 5
+    layers_y = 8
     dx = 0.3
     dy = 0.3
     start_p = np.array([3.3, 0.3])
@@ -90,7 +90,7 @@ def rotmat(theta):
 
 class Agent():
 
-    def __init__(self, sensor_data, dt):
+    def __init__(self, sensor_data, start_pos):
         self.alive = True
         self.state = [LAND, FIND_STARTING, ARISE, LAND, FIND_LANDING, ARISE]
         self.z_target = 0.4
@@ -101,7 +101,7 @@ class Agent():
         self.edges = []
 
         self.update(sensor_data)
-        self.starting_pos = np.copy(self.pos)
+        self.starting_pos = np.copy(start_pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
 
         self.goals = snake()
@@ -115,7 +115,7 @@ class Agent():
 
         self.sensor_data = sensor_data
 
-        self.pos = np.array([sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y']])
+        self.pos = self.starting_pos + np.array([sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y']])
         self.height = sensor_data['stateEstimate.z']
 
         pos_plus = np.concatenate([self.pos, [self.height]])
@@ -297,7 +297,11 @@ class Agent():
 
         z = self.z_target
 
-        yaw_rate = 0.5
+        yaw_rate = 1*np.sin(time.time())
+
+        # yaw_rate = 1
+        # if str(int(time.time()))[-1] == '0': yaw_rate = -1
+
         control_command = [v[0], v[1], z, yaw_rate]
 
         return control_command
