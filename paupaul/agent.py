@@ -13,6 +13,7 @@ LAND = 1
 FIND_LANDING = 2
 FIND_STARTING = 3
 
+
 def return_snake(self):
 
     w = 10
@@ -33,7 +34,7 @@ def return_snake(self):
     return goal_list
 
 # def snake(self):
-    
+
 #     w = 10
 #     h = 3
 #     dx = 0.3
@@ -51,13 +52,14 @@ def return_snake(self):
 
 #     return goal_list
 
+
 def snake():
-    
-    layers_x = 4
+
+    layers_x = 6
     layers_y = 13
-    dx = 0.2
-    dy = 0.2
-    start_p = np.array([3.2, 0.2])
+    dx = 0.3
+    dy = 0.3
+    start_p = np.array([3.3, 0.3])
 
     goal_list = []
 
@@ -69,6 +71,7 @@ def snake():
                 goal_list.append(start_p + np.array([i*dx, (layers_y-j-1)*dy]))
 
     return goal_list
+
 
 def direction_vector(theta):
     return np.array([np.cos(theta), np.sin(theta)])
@@ -90,7 +93,7 @@ class Agent():
     def __init__(self, sensor_data, dt):
         self.alive = True
         self.state = [LAND, FIND_STARTING, ARISE, LAND, FIND_LANDING, ARISE]
-        self.z_target = 0.6
+        self.z_target = 0.4
 
         self.pos_history = deque(maxlen=150)
         self.time_hist = deque(maxlen=150)
@@ -145,18 +148,19 @@ class Agent():
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
 
         for o in obstacles:
-            if np.linalg.norm(o-self.goals[0]) < 0.4: 
+            if np.linalg.norm(o-self.goals[0]) < 0.4:
                 return True
-        
+
         return False
-        
+
     def update_obstacles(self):
 
         sensors = ['range.front', 'range.left', 'range.back', 'range.right']
         obstacles = [self.pos + self.sensor_data[sensor] *
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
-        
-        while self.goal_near(): self.goals.pop(0)
+
+        while self.goal_near():
+            self.goals.pop(0)
 
         self.obst = sorted(np.concatenate([self.obst, obstacles], axis=0).tolist(),
                            key=lambda x: np.linalg.norm(x-self.pos))
@@ -247,7 +251,7 @@ class Agent():
 
         return control_command
 
-    def go_to(self, avoid_obstacles=False):
+    def go_to(self, avoid_obstacles=True):
 
         # if self.waiting:
         #     if time.time() - self.stop_time > 0:
@@ -265,7 +269,7 @@ class Agent():
 
         if self.state[-1] == FIND_LANDING and d < 0.1 and len(self.goals) > 1:
             self.goals.pop(0)
-            return self.go_to() 
+            return self.go_to()
 
         force = 0.4*dp/d
 
@@ -292,7 +296,7 @@ class Agent():
         v = rotmat(-self.yaw) @ v_des
 
         z = self.z_target
-        
+
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
 

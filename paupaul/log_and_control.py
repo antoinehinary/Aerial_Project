@@ -197,7 +197,7 @@ if __name__ == '__main__':
         if is_close(le.sensor_data['range.up']):
             break
 
-        robot.update(le.sensor_data, 0.01)
+        robot.update(le.sensor_data)
         vx, vy, z, yaw_rate = robot.state_update()
 
         cf.commander.send_hover_setpoint(vx, vy, yaw_rate*180/np.pi, z)
