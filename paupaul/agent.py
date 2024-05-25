@@ -36,6 +36,14 @@ class Agent():
     # self._lg_stab.add_variable('stabilizer.yaw', 'float')
     
     def __init__(self, sensor_data, dt):
+
+        ##### ***************parameter to change ****************#####
+        self.x_snake = 0.0   # [m]
+        self.y_snake = 0.0   # [m]
+        ###################################################
+        self.computed_yaw_rate = -0.5
+        self.case = 'turning_right'
+
         self.alive = True
         self.state = ARISE
         self.next_state = FIND_LANDING
@@ -123,6 +131,19 @@ class Agent():
             if i % 2 == 0:
                 for j in range(23, 2, -3):
                     goal_list.append((i,j))
+
+
+        #             ## ATTENTION ECRIRE POSE EN METRE
+        # goal_list = []
+        # for i in range(37-self.x_snake, 50-self.x_snake , +3): 
+        #     if i % 2 ==1:               # must be 4 to be correct 
+        #         for j in range(-self.y_snake + 0.2, 28-self.y_snake, +3):
+        #             goal_list.append((i,j))
+        #     if i % 2 == 0:
+        #         for j in range(28-self.y_snake, -self.y_snake + 0.2, -3):
+        #             goal_list.append((i,j))
+
+
 
         #  [(0, 0.5), (0 , 1), (0.5, 1 ),(0.5, 0.5), (0.5, 0), (1, 0), (1, 0.5), (1,1), (1.5,1), (1.5, 0.5), (1.5,0)]
         
@@ -309,10 +330,27 @@ class Agent():
         # self.goal = np.array([2, 0])
         self.goal_list = self.grid2meters(self.goal_list_grid)
         self.goal = self.goal_list[self.idx_goal]
-
-
-        control_command = self.go_to()
-        return control_command
+        if self.idx_goal == 0 :
+            if self.case == 'turning_right' :
+                self.computed_yaw_rate = -0.5
+                if(self.sensor_data['stabilizer.yaw'] > 20): #30 degrees
+                    self.computed_yaw_rate = 0.5
+                    self.case = 'turning_left'
+                vx, vy, z, yaw_rate = self.go_to()
+                return vx, vy, z, self.computed_yaw_rate
+                    
+            elif self.case == 'turning_left' :
+                self.computed_yaw_rate = 0.5
+                if(self.sensor_data['stabilizer.yaw'] < -20): #-30 degrees
+                    self.computed_yaw_rate = -0.5
+                    self.case = 'turning_right'
+                
+                vx, vy, z, yaw_rate = self.go_to()
+                return vx, vy, z, self.computed_yaw_rate
+    
+        else :
+            control_command = self.go_to()
+            return control_command
     
     def go_to(self):
         # print("state : ", self.state)
@@ -330,7 +368,7 @@ class Agent():
         # obstacle dans pt :   
         # if d < 0.4 and 
 
-        force = 0.4*dp/d
+        force = 0.3*dp/d
         repulsion_force = self.repulsion_force(self.pos)
         
         # repulsion_force_prime = self.repulsion_force(self.pos+self.speed*self.dt)   
@@ -353,7 +391,7 @@ class Agent():
 
         z = self.z_target
         # yaw = np.clip(self.height, a_min=0, a_max=0.5)
-        yaw_rate = 0.5
+        yaw_rate = 0.0
         control_command = [v[0], v[1], z, yaw_rate]
                        # roll/pitch/yaw_Rate/thrust
         if self.state != GO_HOME:

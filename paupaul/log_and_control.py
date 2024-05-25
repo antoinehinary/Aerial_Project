@@ -334,8 +334,7 @@ if __name__ == '__main__':
     kill_motor = False
     started = False
     final_landing = False
-    computed_yaw_rate = -0.5
-    case = 'turning_right'
+    
 
     heading = "front"
     landing_state = "INIT"
@@ -484,8 +483,17 @@ if __name__ == '__main__':
                     time.sleep(0.1)
             
             elif landing_state == "LAND":
-                if le.sensor_data["stateEstimate.z"] > 0.14:
+
+                if le.sensor_data["stateEstimate.z"] > 0.08:
+                    print(f"end_pos x :{le.sensor_data["stateEstimate.x"] } ,end_pos y : {le.sensor_data["stateEstimate.y"]} ")
                     cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.06, 0)
+                    
+                    if le.sensor_data["stateEstimate.z"] < 0.105:
+                        print(f"pos_new x :{le.sensor_data["stateEstimate.x"] } ,pos_new y : {le.sensor_data["stateEstimate.y"]} ")
+                        if final_landing == True : 
+                            cf.close_link()
+                        else:
+                            landing_state = "GO_HOME"
                 else: 
                     cf.commander.send_stop_setpoint()
                     time.sleep(2.5)
@@ -493,6 +501,7 @@ if __name__ == '__main__':
                         cf.close_link()
                     else:
                         landing_state = "GO_HOME"
+                        print(f"pos_go_home x :{le.sensor_data["stateEstimate.x"] } ,pos_go_home y : {le.sensor_data["stateEstimate.y"]} ")
             
             elif landing_state == "GO_HOME":
                 robot.state_update()
@@ -519,22 +528,10 @@ if __name__ == '__main__':
         else:
             if started == False : 
 
-                if case == 'turning_right' :
-                    print("yaw : ", le.sensor_data['stabilizer.yaw'])
-                    computed_yaw_rate = -0.5
-                    if(le.sensor_data['stabilizer.yaw'] > 30): #30 degrees
-                        computed_yaw_rate = 0.5
-                        case = 'turning_left'
-                       
-                elif case == 'turning_left' :
-                    computed_yaw_rate = 0.5
-                    if(le.sensor_data['stabilizer.yaw'] < -30): #-30 degrees
-                        computed_yaw_rate = -0.5
-                        case = 'turning_right'
-                 
+                
 
                 vx, vy, z, yaw_rate = robot.state_update()
-                cf.commander.send_hover_setpoint(vx , vy, computed_yaw_rate*180/np.pi, z) 
+                cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z) 
       
     cf.commander.send_stop_setpoint()
     cf.close_link()
