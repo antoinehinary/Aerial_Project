@@ -177,7 +177,7 @@ if __name__ == '__main__':
     time.sleep(2)
 
     robot = agent.Agent(le.sensor_data, 0.1)
-    robot.update(le.sensor_data, 0.1)
+    robot.update(le.sensor_data)
 
     t = []
     vz = []
@@ -235,7 +235,7 @@ if __name__ == '__main__':
         z_list = np.asarray(z_list)
         t = np.asarray(t) - t[0]
         keypressed = np.asarray(keypressed)
-        
+
         np.save(os.path.join("paupaul", "logs", "z_list"), z_list)
 
         plt.subplot(1, 2, 1)
@@ -254,7 +254,6 @@ if __name__ == '__main__':
         plt.fill_between(t, 0.5, where=keypressed, facecolor='green', alpha=.5)
         # plt.vlines(state_changes, 0, 0.7, colors='r', linestyles='--')
         plt.vlines(datapoints, 0, 0.7, colors='r', linestyles='--')
-        
 
         plt.savefig(os.path.join("paupaul", "logs", "zs"))
         plt.show()
@@ -272,4 +271,3 @@ if __name__ == '__main__':
         plt.gca().set_aspect('equal', adjustable='box')
         plt.savefig(os.path.join("paupaul", "logs", "trajectory"))
         plt.show()
-

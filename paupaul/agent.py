@@ -53,8 +53,7 @@ class Agent():
 
     def __init__(self, sensor_data, dt):
         self.alive = True
-        self.state = ARISE
-        self.next_state = FIND_LANDING
+        self.state = [LAND, FIND_STARTING, ARISE, LAND, FIND_LANDING, ARISE]
         self.z_target = 0.6
 
         self.pos_history = deque(maxlen=150)
@@ -62,7 +61,7 @@ class Agent():
 
         self.edges = []
 
-        self.update(sensor_data, dt)
+        self.update(sensor_data)
         self.starting_pos = np.copy(self.pos)
         self.obst = [2*direction_vector(self.yaw + i*np.pi/2) for i in range(4)]
 
@@ -73,10 +72,9 @@ class Agent():
         # self.speed_toggle = False
         self.waiting = False
 
-    def update(self, sensor_data, dt):
+    def update(self, sensor_data):
 
         self.sensor_data = sensor_data
-        self.dt = dt
 
         self.pos = np.array([sensor_data['stateEstimate.x'], sensor_data['stateEstimate.y']])
         self.height = sensor_data['stateEstimate.z']
@@ -91,17 +89,17 @@ class Agent():
 
         self.update_obstacles()
 
-        if self.state == ARISE:
+        if self.state[-1] == ARISE:
             control_command = self.arise()
 
-        elif self.state == LAND:
+        elif self.state[-1] == LAND:
             control_command = self.land()
 
-        elif self.state == FIND_LANDING:
+        elif self.state[-1] == FIND_LANDING:
             control_command = self.find_landing()
 
-        elif self.state == FIND_STARTING:
-            control_command = 4*[0]
+        elif self.state[-1] == FIND_STARTING:
+            control_command = [0, 0, self.z_target, 0]
 
         return control_command
 
@@ -130,27 +128,21 @@ class Agent():
             return control_command
 
         else:
-            self.state = self.next_state
+            self.state.pop()
             return self.state_update()
 
     def land(self):
 
-        if self.height > 0.05:
-            # v_des = self.goal - self.pos
-            # v = rotmat(-self.yaw) @ v_des
+        if self.height > 0.01:
 
             z = np.clip(self.height - 0.1, a_min=0., a_max=None)
-            # yaw = 0
 
             control_command = [0, 0, z, 0]
-
-            # control_command = [v[0], v[1], z, yaw]
             return control_command
 
         else:
-            self.alive = False
-            control_command = [0, 0, 0, 0]
-            return control_command
+            self.state.pop()
+            return self.state_update()
 
     def detect_edge(self):
 
@@ -168,7 +160,6 @@ class Agent():
                     print("False positive")
                     return
 
-            # index = np.argmax(hist[np.clip(p[0]-50, 0, a_max=None):p[0], 2])
             index = info['left_bases'][0]
             pos = hist[index, 0:2]
 
@@ -190,8 +181,6 @@ class Agent():
 
     def find_landing(self, verbose=True):
 
-        # if np.abs(self.sensor_data['stateEstimate.vz']) > 0.1: self.speed_toggle = True
-
         match len(self.edges):
             case 0:
                 self.detect_edge()
@@ -200,86 +189,14 @@ class Agent():
                     dp = self.goal-self.pos
                     dp /= np.linalg.norm(dp) + 0.00001  # prevent 0 division
 
-                    self.goal = self.pos + 2*dp  # new goal 2 meters forward
-
-                    self.wait(2)
+                    self.goal = self.pos + 0.05*dp  # new goal 0.05 meters forward
 
                     if verbose:
                         print("First edge detected")
             case 1:
-                self.detect_edge()
-
-                if len(self.edges) == 2:
-
-                    self.goal = np.mean(self.edges, axis=0)
-                    self.mean_toggle = True  # for the case 2
-
-                    if verbose:
-                        print("Second edge detected")
-            case 2:
-                if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.01:
-
-                    # self.datapoints.append(self.pos)
-
-                    de = self.edges[1]-self.edges[0]
-                    de /= np.linalg.norm(de)
-                    self.goal = np.mean(np.asarray(self.edges)[0:2], axis=0) + np.array([-de[1], de[0]])
-                    self.mean_toggle = False
-
-                    # self.datapoints.append(self.goal)
-
-                    self.pos_history.clear()
-                    self.time_hist.clear()
-
-                    # self.wait(2)
-
-                    if verbose:
-                        print("Looking for third edge")
-
-                elif not self.mean_toggle:
-
-                    self.detect_edge()
-
-                    if len(self.edges) == 3:
-
-                        de = self.edges[1]-self.edges[0]
-                        de /= np.linalg.norm(de)
-                        edges = np.asarray(self.edges)
-                        self.goal = np.mean(edges[0:2], axis=0) + np.array([de[1], -de[0]])
-
-                        # self.datapoints.append(self.goal)
-
-                        if verbose:
-                            print("Third edge detected")
-                            # self.datapoints.append(self.pos)
-
-            case 3:
-                self.detect_edge()
-
-                if len(self.edges) == 4:
-
-                    edges = np.asarray(self.edges)
-                    self.goal = 0.5*(np.min(edges, axis=0) + np.max(edges, axis=0))
-                    # self.speed_toggle = False
-
-                    # self.datapoints.append(self.pos)
-
-                    if verbose:
-                        print("Fourth edge detected")
-
-            case 4:
-                if np.linalg.norm(self.pos - self.goal) < 0.03:
-                    self.state = LAND
-                    self.next_state = FIND_STARTING
-
-                    if verbose:
-                        print("Arrived at estimated center")
-
-                    control_command = self.state_update()
-                    return control_command
-            case _:
-                print("Wrong number of edges")
-                self.alive = False
+                if np.linalg.norm(self.goal-self.pos) < 0.02:
+                    self.state.pop()
+                    return self.state_update()
 
         if len(self.edges):
             control_command = self.go_to(avoid_obstacles=False)
