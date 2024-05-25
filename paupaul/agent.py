@@ -118,10 +118,10 @@ class Agent():
         goal_list = []
         for i in range(37, 50, +3): 
             if i % 2 ==1:               # must be 4 to be correct 
-                for j in range(2, 26, +3):
+                for j in range(2, 23, +3):
                     goal_list.append((i,j))
             if i % 2 == 0:
-                for j in range(26, 2, -3):
+                for j in range(23, 2, -3):
                     goal_list.append((i,j))
 
         #  [(0, 0.5), (0 , 1), (0.5, 1 ),(0.5, 0.5), (0.5, 0), (1, 0), (1, 0.5), (1,1), (1.5,1), (1.5, 0.5), (1.5,0)]
@@ -253,7 +253,7 @@ class Agent():
 
         
     def state_update(self):
-        self.map = self.occupancy_map(self.map)
+        # self.map = self.occupancy_map(self.map)
 
         self.update_obstacles()
         
@@ -317,7 +317,7 @@ class Agent():
     def go_to(self):
         # print("state : ", self.state)
         dp = self.goal-self.pos
-        d = np.linalg.norm(dp)
+        d = np.linalg.norm(dp) + 0.000000001
         # print("d : ", d)
 
         
