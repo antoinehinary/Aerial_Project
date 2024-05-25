@@ -493,14 +493,14 @@ if __name__ == '__main__':
                         landing_state = "GO_HOME"
             
             elif landing_state == "GO_HOME":
-                print("GO HOME REACHED") 
+                robot.state_update()
                 if le.sensor_data["stateEstimate.z"] < robot.z_target:
-                    cf.commander.send_position_setpoint(le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"]+0.1, 0)
+                    cf.commander.send_position_setpoint(le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"]+0.06, 0)
                 else :
                     if le.sensor_data["stateEstimate.z"] >= robot.z_target :
                         print("REACHED GOING HOME")
                         vx, vy, z, yaw_rate  = robot.go_home()
-                        cf.commander.send_hover_setpoint(vx , vy, 0, z)
+                        cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
                         if abs(robot.goal[0]-le.sensor_data["stateEstimate.x"]) < 0.005 and abs(robot.goal[1]-le.sensor_data["stateEstimate.y"]) < 0.005:
                             landing_state = "LAND"
                             print("LAND")
@@ -517,7 +517,7 @@ if __name__ == '__main__':
         else:
             if started == False : 
                 vx, vy, z, yaw_rate = robot.state_update()
-                cf.commander.send_hover_setpoint(vx , vy, yaw_rate, z)
+                cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z) 
       
     cf.commander.send_stop_setpoint()
     cf.close_link()
