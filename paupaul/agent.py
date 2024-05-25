@@ -59,7 +59,7 @@ class Agent():
 
         self.pos_history = deque(maxlen=150)
         self.time_hist = deque(maxlen=150)
-        
+
         self.edges = []
 
         self.update(sensor_data, dt)
@@ -69,7 +69,7 @@ class Agent():
         self.goal = np.array([4, 0])  # to replace
 
         self.datapoints = []
-        
+
         # self.speed_toggle = False
         self.waiting = False
 
@@ -117,13 +117,16 @@ class Agent():
     def arise(self):
 
         if self.height < self.z_target:
+
             v_des = self.starting_pos - self.pos
             v = rotmat(-self.yaw) @ v_des
             z = np.clip(self.z_target, a_min=None, a_max=self.height+0.3)
 
             yaw = 0
 
-            control_command = [v[0], v[1], z, yaw]
+            # control_command = [v[0], v[1], z, yaw]
+            control_command = [0, 0, z, 0]
+
             return control_command
 
         else:
@@ -168,10 +171,10 @@ class Agent():
             # index = np.argmax(hist[np.clip(p[0]-50, 0, a_max=None):p[0], 2])
             index = info['left_bases'][0]
             pos = hist[index, 0:2]
-            
+
             self.datapoints.append(self.time_hist[index])
             self.datapoints.append(self.time_hist[info['right_bases'][0]])
-   
+
             self.edges.append(pos)
             print("Edge pos:", pos)
 
@@ -179,16 +182,16 @@ class Agent():
 
             self.pos_history.clear()
             self.time_hist.clear()
-    
+
     def wait(self, t):
         self.stop_time = time.time() + t
         self.waiting = True
         self.wait_pos = np.copy(self.pos)
-    
+
     def find_landing(self, verbose=True):
-        
+
         # if np.abs(self.sensor_data['stateEstimate.vz']) > 0.1: self.speed_toggle = True
-        
+
         match len(self.edges):
             case 0:
                 self.detect_edge()
@@ -227,7 +230,7 @@ class Agent():
 
                     self.pos_history.clear()
                     self.time_hist.clear()
-                    
+
                     # self.wait(2)
 
                     if verbose:
@@ -243,7 +246,7 @@ class Agent():
                         de /= np.linalg.norm(de)
                         edges = np.asarray(self.edges)
                         self.goal = np.mean(edges[0:2], axis=0) + np.array([de[1], -de[0]])
-                        
+
                         # self.datapoints.append(self.goal)
 
                         if verbose:
@@ -258,12 +261,12 @@ class Agent():
                     edges = np.asarray(self.edges)
                     self.goal = 0.5*(np.min(edges, axis=0) + np.max(edges, axis=0))
                     # self.speed_toggle = False
-                    
+
                     # self.datapoints.append(self.pos)
 
                     if verbose:
                         print("Fourth edge detected")
-    
+
             case 4:
                 if np.linalg.norm(self.pos - self.goal) < 0.03:
                     self.state = LAND
@@ -288,7 +291,7 @@ class Agent():
     def go_to(self, avoid_obstacles=False):
 
         if self.waiting:
-            if time.time() - self.stop_time > 0: 
+            if time.time() - self.stop_time > 0:
                 self.waiting = False
             else:
                 v_des = self.wait_pos - self.pos
@@ -296,7 +299,7 @@ class Agent():
                 z = self.z_target
                 yaw_rate = 0.5
                 control_command = [v[0], v[1], z, yaw_rate]
-                return control_command         
+                return control_command
 
         dp = self.goal-self.pos
         d = np.linalg.norm(dp)+0.0001  # prevent 0 division
@@ -320,8 +323,12 @@ class Agent():
 
         v_des = force
 
-        v = rotmat(-self.yaw) @ v_des
+        v_feedback = 0.5*((self.pos_history[-1][0:2] - self.pos_history[-2][0:2]) /
+                          (self.time_hist[-1]-self.time_hist[-2]) - v_des)
+
+        v = rotmat(-self.yaw) @ (v_des - v_feedback)
         z = self.z_target
+
         yaw_rate = 0.5
         control_command = [v[0], v[1], z, yaw_rate]
 
