@@ -210,12 +210,12 @@ if __name__ == '__main__':
         y.append(le.sensor_data['stateEstimate.y'])
         z_list.append(le.sensor_data['stateEstimate.z'])
 
-        if robot.state != current_state:
-            changes.append(t[-1])
-            current_state = int(robot.state)
-        if len(robot.edges) != current_edges:
-            changes.append(t[-1])
-            current_edges = len(robot.edges)
+        # if robot.state != current_state:
+        #     changes.append(t[-1])
+        #     current_state = int(robot.state)
+        # if len(robot.edges) != current_edges:
+        #     changes.append(t[-1])
+        #     current_edges = len(robot.edges)
 
         if keyboard.is_pressed('q'):
             keypressed.append(1)
@@ -228,20 +228,23 @@ if __name__ == '__main__':
     if True:
         # plotting
         vz = np.asarray(vz)
-        state_changes = np.asarray(changes) - t[0]
+        datapoints = np.asarray(robot.datapoints) - t[0]
+        # state_changes = np.asarray(changes) - t[0]
         x = np.asarray(x)
         y = np.asarray(y)
         z_list = np.asarray(z_list)
         t = np.asarray(t) - t[0]
         keypressed = np.asarray(keypressed)
-        # datapoints = np.asarray(robot.datapoints)
+        
+        np.save(os.path.join("paupaul", "logs", "z_list"), z_list)
 
         plt.subplot(1, 2, 1)
         plt.plot(t, vz)
         plt.xlabel("Seconds [s]")
         plt.ylabel(r"Vertical speed $v_z$ [m/s]")
         plt.fill_between(t, 0.5, where=keypressed, facecolor='green', alpha=.5)
-        plt.vlines(state_changes, -0.5, 0.5, colors='r', linestyles='--')
+        # plt.vlines(state_changes, -0.5, 0.5, colors='r', linestyles='--')
+        plt.vlines(datapoints, -0.5, 0.5, colors='r', linestyles='--')
 
         plt.subplot(1, 2, 2)
         plt.plot(t, z_list)
@@ -249,8 +252,9 @@ if __name__ == '__main__':
         plt.ylabel("z [m]")
 
         plt.fill_between(t, 0.5, where=keypressed, facecolor='green', alpha=.5)
-        plt.vlines(state_changes, 0, 0.7, colors='r', linestyles='--')
-
+        # plt.vlines(state_changes, 0, 0.7, colors='r', linestyles='--')
+        plt.vlines(datapoints, 0, 0.7, colors='r', linestyles='--')
+        
 
         plt.savefig(os.path.join("paupaul", "logs", "zs"))
         plt.show()
@@ -269,4 +273,3 @@ if __name__ == '__main__':
         plt.savefig(os.path.join("paupaul", "logs", "trajectory"))
         plt.show()
 
-        np.save(os.path.join("paupaul", "logs", "z_list"), z_list)

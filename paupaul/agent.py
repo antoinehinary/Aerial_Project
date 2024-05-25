@@ -58,6 +58,8 @@ class Agent():
         self.z_target = 0.6
 
         self.pos_history = deque(maxlen=150)
+        self.time_hist = deque(maxlen=150)
+        
         self.edges = []
 
         self.update(sensor_data, dt)
@@ -81,6 +83,7 @@ class Agent():
 
         pos_plus = np.concatenate([self.pos, [self.height]])
         self.pos_history.append(pos_plus)
+        self.time_hist.append(time.time())
 
         self.yaw = sensor_data['stabilizer.yaw']*np.pi/180
 
@@ -150,7 +153,7 @@ class Agent():
 
         hist = np.asarray(self.pos_history)
 
-        p, _ = find_peaks(-hist[:, 2], prominence=0.05)
+        p, info = find_peaks(-hist[:, 2], prominence=0.05)
 
         if len(p) == 1:
 
@@ -163,15 +166,19 @@ class Agent():
                     return
 
             # index = np.argmax(hist[np.clip(p[0]-50, 0, a_max=None):p[0], 2])
-            index = np.argmax(hist[0:p[0], 2])
+            index = info['left_bases'][0]
             pos = hist[index, 0:2]
+            
+            self.datapoints.append(self.time_hist[index])
+            self.datapoints.append(self.time_hist[info['right_bases'][0]])
+   
             self.edges.append(pos)
             print("Edge pos:", pos)
 
             np.save(os.path.join("paupaul", "logs", "edge"), hist)
 
             self.pos_history.clear()
-            
+            self.time_hist.clear()
     
     def wait(self, t):
         self.stop_time = time.time() + t
@@ -192,6 +199,8 @@ class Agent():
 
                     self.goal = self.pos + 2*dp  # new goal 2 meters forward
 
+                    self.wait(2)
+
                     if verbose:
                         print("First edge detected")
             case 1:
@@ -207,17 +216,19 @@ class Agent():
             case 2:
                 if self.mean_toggle and np.linalg.norm(self.pos - self.goal) < 0.01:
 
-                    self.datapoints.append(self.pos)
+                    # self.datapoints.append(self.pos)
 
                     de = self.edges[1]-self.edges[0]
                     de /= np.linalg.norm(de)
                     self.goal = np.mean(np.asarray(self.edges)[0:2], axis=0) + np.array([-de[1], de[0]])
                     self.mean_toggle = False
 
-                    self.datapoints.append(self.goal)
+                    # self.datapoints.append(self.goal)
 
                     self.pos_history.clear()
-                    self.wait(2)
+                    self.time_hist.clear()
+                    
+                    # self.wait(2)
 
                     if verbose:
                         print("Looking for third edge")
@@ -232,12 +243,12 @@ class Agent():
                         de /= np.linalg.norm(de)
                         edges = np.asarray(self.edges)
                         self.goal = np.mean(edges[0:2], axis=0) + np.array([de[1], -de[0]])
-
-                        self.datapoints.append(self.goal)
+                        
+                        # self.datapoints.append(self.goal)
 
                         if verbose:
                             print("Third edge detected")
-                            self.datapoints.append(self.pos)
+                            # self.datapoints.append(self.pos)
 
             case 3:
                 self.detect_edge()
@@ -247,7 +258,9 @@ class Agent():
                     edges = np.asarray(self.edges)
                     self.goal = 0.5*(np.min(edges, axis=0) + np.max(edges, axis=0))
                     # self.speed_toggle = False
-        
+                    
+                    # self.datapoints.append(self.pos)
+
                     if verbose:
                         print("Fourth edge detected")
     
@@ -296,31 +309,14 @@ class Agent():
 
         # if self.state == FIND_LANDING and self.speed_toggle:
         if self.state == FIND_LANDING and len(self.edges):
-
             force *= 0.2/np.linalg.norm(force)
-
-            # dp = self.goal-self.pos
-            # d_dp = np.linalg.norm(dp) + 0.00001
-
-            # # speed control
-            # if np.linalg.norm(dp) < 0.05:
-            #     force = dp + 0.025*dp/d_dp
-
-            # line control
-            # n = np.array([-(self.goal[1]-self.edges[-1][1]), self.goal[0]-self.edges[-1][0]])
-            # n /= np.linalg.norm(n)  # should not be 0
-            # d = np.dot(dp, n)
-            # force += d
-
-        # reduce speed
-        # d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
-        # v_des = force * np.clip(d_min/0.3, 0.05/0.4, 1)  # max_dist, min_speed, (max_speed)
 
         dp = self.goal-self.pos
         d_dp = np.linalg.norm(dp) + 0.00001
         # speed control
         if np.linalg.norm(dp) < 0.05:
-            force = dp + 0.025*dp/d_dp
+            # force = dp + 0.025*dp/d_dp
+            force = dp
 
         v_des = force
 
