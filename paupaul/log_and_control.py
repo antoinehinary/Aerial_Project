@@ -42,7 +42,9 @@ import keyboard
 import threading
 
 
-uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
+# uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
+uri = uri_helper.uri_from_env(default='radio://0/10/2M/E7E7E7E711')
+
 HEIGHT_COEFF = 100
 start_search = False
 # Only output errors from the logging framework
@@ -325,6 +327,10 @@ if __name__ == '__main__':
     dy = 0
     x_landing_center = 0
     y_landing_center = 0
+    x_before_landing = 0
+    y_before_landing = 0
+    x_offset_landing = 0
+    y_offset_landing = 0
     delta_pad = 0 
     k = 100
 
@@ -334,6 +340,7 @@ if __name__ == '__main__':
     kill_motor = False
     started = False
     final_landing = False
+    offset_computed = False
     
 
     heading = "front"
@@ -399,16 +406,16 @@ if __name__ == '__main__':
                         heading = "right" # right
                 if heading == "front" :
                     x_landing_center = le.sensor_data["stateEstimate.x"]
-                    y_landing_center = le.sensor_data["stateEstimate.y"]
+                    y_landing_center = le.sensor_data["stateEstimate.y"] +0.05
                 elif heading == "back" :
                     x_landing_center = le.sensor_data["stateEstimate.x"]
-                    y_landing_center = le.sensor_data["stateEstimate.y"]
+                    y_landing_center = le.sensor_data["stateEstimate.y"]+0.05
                 elif heading == "left" :
                     x_landing_center = le.sensor_data["stateEstimate.x"]
-                    y_landing_center = le.sensor_data["stateEstimate.y"]
+                    y_landing_center = le.sensor_data["stateEstimate.y"]+0.05
                 else :
                     x_landing_center = le.sensor_data["stateEstimate.x"]
-                    y_landing_center = le.sensor_data["stateEstimate.y"]
+                    y_landing_center = le.sensor_data["stateEstimate.y"]+0.05
 
                 print("EDGE_DETECTED")
                 landing_state = "CENTER_DRONE"
@@ -483,42 +490,39 @@ if __name__ == '__main__':
                     time.sleep(0.1)
             
             elif landing_state == "LAND":
-
-                if le.sensor_data["stateEstimate.z"] > 0.08:
-                    print(f"end_pos x :{le.sensor_data["stateEstimate.x"] } ,end_pos y : {le.sensor_data["stateEstimate.y"]} ")
+                if le.sensor_data["stateEstimate.z"] > 0.12:
                     cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.06, 0)
-                    
-                    if le.sensor_data["stateEstimate.z"] < 0.105:
-                        print(f"pos_new x :{le.sensor_data["stateEstimate.x"] } ,pos_new y : {le.sensor_data["stateEstimate.y"]} ")
-                        if final_landing == True : 
-                            cf.close_link()
-                        else:
-                            landing_state = "GO_HOME"
                 else: 
+                    x_before_landing = le.sensor_data["stateEstimate.x"]
+                    y_before_landing = le.sensor_data["stateEstimate.y"]
                     cf.commander.send_stop_setpoint()
+                    started = False
                     time.sleep(2.5)
                     if final_landing == True : 
                         cf.close_link()
                     else:
                         landing_state = "GO_HOME"
-                        print(f"pos_go_home x :{le.sensor_data["stateEstimate.x"] } ,pos_go_home y : {le.sensor_data["stateEstimate.y"]} ")
             
             elif landing_state == "GO_HOME":
-                robot.state_update()
                 if le.sensor_data["stateEstimate.z"] < robot.z_target:
-                    cf.commander.send_position_setpoint(le.sensor_data["stateEstimate.x"], le.sensor_data["stateEstimate.y"], le.sensor_data["stateEstimate.z"]+0.06, 0)
+                    print("going home")
+                    cf.commander.send_hover_setpoint(0, 0, 0, le.sensor_data["stateEstimate.z"]+0.06)
                 else :
-                    if le.sensor_data["stateEstimate.z"] >= robot.z_target :
-                        print("REACHED GOING HOME")
-                        vx, vy, z, yaw_rate  = robot.go_home()
-                        cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
-                        if abs(robot.goal[0]-le.sensor_data["stateEstimate.x"]) < 0.005 and abs(robot.goal[1]-le.sensor_data["stateEstimate.y"]) < 0.005:
-                            landing_state = "LAND"
-                            print("LAND")
-                            x_landing_center = 0
-                            y_landing_center = 0
-                            final_landing = True
-                            cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.06, 0)
+                    if not offset_computed :
+                        x_offset_landing =  le.sensor_data["stateEstimate.x"]
+                        y_offset_landing =  le.sensor_data["stateEstimate.y"]
+                        offset_computed = True
+                    print("REACHED GOING HOME")
+                    robot.goal = (0 - x_offset_landing, 0 - y_offset_landing)
+                    vx, vy, z, yaw_rate  = robot.go_home()
+                    cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z)
+                    if abs(robot.goal[0]-le.sensor_data["stateEstimate.x"]) < 0.005 and abs(robot.goal[1]-le.sensor_data["stateEstimate.y"]) < 0.005:
+                        landing_state = "LAND"
+                        print("LAND")
+                        x_landing_center = 0 - x_offset_landing
+                        y_landing_center = 0 - y_offset_landing
+                        final_landing = True
+                        cf.commander.send_position_setpoint(x_landing_center, y_landing_center, le.sensor_data["stateEstimate.z"]-0.06, 0)
 
         time.sleep(0.01)
 
@@ -527,9 +531,6 @@ if __name__ == '__main__':
             cf.commander.send_hover_setpoint(0, 0,0, le.sensor_data["stateEstimate.z"]+0.1)
         else:
             if started == False : 
-
-                
-
                 vx, vy, z, yaw_rate = robot.state_update()
                 cf.commander.send_hover_setpoint(vx , vy, yaw_rate*180/np.pi, z) 
       

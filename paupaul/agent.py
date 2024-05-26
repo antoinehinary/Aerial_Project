@@ -395,7 +395,7 @@ class Agent():
         control_command = [v[0], v[1], z, yaw_rate]
                        # roll/pitch/yaw_Rate/thrust
         if self.state != GO_HOME:
-            if d < 0.3 and min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) < 500:
+            if d < 0.4 and min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) < 500:
                 print("goal skiped")
                 print("minuimum: ",  min( self.sensor_data["range.right"] , self.sensor_data["range.left"], self.sensor_data["range.back"]) )
                 if self.sensor_data["range.front"]  < 2250:
@@ -457,7 +457,7 @@ class Agent():
         
         for obstacle in self.obst:
             do = obstacle - pos
-            d = np.linalg.norm(do)
+            d = np.linalg.norm(do) +  0.000000001
             
             force = rep_const/d**order
             
@@ -486,7 +486,6 @@ class Agent():
     
     def go_home(self):
         self.state = GO_HOME
-        self.goal = (0,0)
         control_command = self.go_to()
         return control_command
 
