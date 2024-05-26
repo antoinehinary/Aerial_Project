@@ -124,6 +124,7 @@ class Agent():
         ################################################################
 
         goal_list = []
+        goal_list.append((37, 15))
         for i in range(37, 50, +3): 
             if i % 2 ==1:               # must be 4 to be correct 
                 for j in range(2, 23, +3):
@@ -299,7 +300,7 @@ class Agent():
     
     def update_obstacles(self):
 
-        sensors = ['range.front', 'range.left', 'range.back', 'range.right']
+        sensors = ['range.front', 'range.left', 'range.right'] # 'range.back',
         obstacles = [self.pos + self.sensor_data[sensor]*direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
         self.obst = sorted(np.concatenate([self.obst, obstacles], axis=0).tolist(), key=lambda x: np.linalg.norm(x-self.pos))
         self.obst = np.asarray(self.obst)[0:4] # keep only 4 nearest
@@ -332,17 +333,17 @@ class Agent():
         self.goal = self.goal_list[self.idx_goal]
         if self.idx_goal == 0 :
             if self.case == 'turning_right' :
-                self.computed_yaw_rate = -0.5
-                if(self.sensor_data['stabilizer.yaw'] > 20): #30 degrees
-                    self.computed_yaw_rate = 0.5
+                self.computed_yaw_rate = -0.9
+                if(self.sensor_data['stabilizer.yaw'] > 25): #30 degrees
+                    self.computed_yaw_rate = 0.9
                     self.case = 'turning_left'
                 vx, vy, z, yaw_rate = self.go_to()
                 return vx, vy, z, self.computed_yaw_rate
                     
             elif self.case == 'turning_left' :
-                self.computed_yaw_rate = 0.5
-                if(self.sensor_data['stabilizer.yaw'] < -20): #-30 degrees
-                    self.computed_yaw_rate = -0.5
+                self.computed_yaw_rate = 0.9
+                if(self.sensor_data['stabilizer.yaw'] < -25): #-30 degrees
+                    self.computed_yaw_rate = -0.9
                     self.case = 'turning_right'
                 
                 vx, vy, z, yaw_rate = self.go_to()
@@ -368,7 +369,7 @@ class Agent():
         # obstacle dans pt :   
         # if d < 0.4 and 
 
-        force = 0.3*dp/d
+        force = 0.2*dp/d
         repulsion_force = self.repulsion_force(self.pos)
         
         # repulsion_force_prime = self.repulsion_force(self.pos+self.speed*self.dt)   
@@ -378,13 +379,49 @@ class Agent():
         # print(force, repulsion_force)
         
         force += repulsion_force
+
+        # print(" norm force :", np.linalg.norm(force))
+        # print("force amplitude :", force)
+        if np.linalg.norm(force) < 0.001 and self.pos[0]> 0.6 : 
+            print("stuck")
+        #     # problem if in the middle :
+        #     force = (np.array([self.pos[0], 1.5]) - self.pos) / np.linalg.norm((np.array([self.pos[0], 1.5]) - self.pos))
+
+        #     # autre methode :
+        #     if 1.5 - self.pos[0] > 0:
+        #         print("stuck a droite")
+        #         force =  np.linalg.norm(np.array([self.pos[0], self.pos[1] + 0.1]) - self.pos)
+
+        #     else:
+        #         print("stuck a gauche")
+        #         force =  np.linalg.norm(np.array([self.pos[0], self.pos[1] - 0.1]) - self.pos)
+                
+
+        # # force = (np.array([self.pos[0], 1.5]) - self.pos) / np.linalg.norm((np.array([self.pos[0], 1.5]) - self.pos))
+
+        ##### reduire la norme de la force si vas trop vite 
+
         
         # print("repulsion force", repulsion_force)
         # force -= df
         
         # v_des = self.force_filter(force)
-        d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
-        v_des = force * np.clip(d_min/0.3, 0, 1)
+        #d_min = np.min([d, np.linalg.norm(force), np.linalg.norm(self.obst[0]-self.pos)])
+       
+        # speed control
+        if np.linalg.norm(dp) < 0.05:
+            force = dp
+
+        if np.linalg.norm(force) >= 0.35:
+            print("limite force ")
+            # force = 
+            # Calculate the scaling factor to reduce the norm to 0.47
+            scaling_factor = 0.35 / np.linalg.norm(force)
+            # Scale both components of the force vector
+            force = force * scaling_factor
+            print("new force :", force)
+
+        v_des = force # * np.clip(d_min/0.3, 0, 1)
         v = rotmat(-self.yaw) @ v_des
         # print("d_min: ",d_min)
 
@@ -425,24 +462,24 @@ class Agent():
                     return control_command
 
             if d < 0.1:
-                    print("goal reached")
-                    if self.idx_goal == len(self.goal_list):
-                        print("end path")
-                        control_command = self.land()
-                        return control_command 
-                    else :
-                        # print(" idx increament, go to next goal ")
-                        # print( " goal :", self.goal)
-                        self.idx_goal += 1
-                        # self.show_plot()
-                        print("idx : ", self.idx_goal)
-                        # print("next goal :", self.goal_list[self.idx_goal])
+                print("goal reached")
+                if self.idx_goal == len(self.goal_list):
+                    print("end path")
+                    control_command = self.land()
+                    return control_command 
+                else :
+                    # print(" idx increament, go to next goal ")
+                    # print( " goal :", self.goal)
+                    self.idx_goal += 1
+                    # self.show_plot()
+                    print("idx : ", self.idx_goal)
+                    # print("next goal :", self.goal_list[self.idx_goal])
 
 
-                        # while self.map[self.goal_list[self.idx_goal]] != 0:
-                        #     self.idx_goal += 1
+                    # while self.map[self.goal_list[self.idx_goal]] != 0:
+                    #     self.idx_goal += 1
 
-                        return control_command
+                    return control_command
 
         return control_command
 
@@ -450,7 +487,7 @@ class Agent():
         
     def repulsion_force(self, pos):
         
-        rep_const = 0.02
+        rep_const = 0.012
         order = 1
         
         f = np.zeros((2,))

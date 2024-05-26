@@ -43,7 +43,7 @@ import threading
 
 
 # uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
-uri = uri_helper.uri_from_env(default='radio://0/10/2M/E7E7E7E711')
+uri = uri_helper.uri_from_env(default='radio://0/70/2M/E7E7E7E707')
 
 HEIGHT_COEFF = 100
 start_search = False
