@@ -292,11 +292,32 @@ class Agent():
             self.goals.pop(0)
             return self.go_to()
 
-        force = 0.4*dp/d
+        force = 0.3*dp/d
 
         if avoid_obstacles:
             repulsion_force = self.repulsion_force(self.pos)
             force += repulsion_force
+
+
+        #print("force amplitude :", force)
+        # if force < 0.0001 :
+        #     print("stuck")
+        #     # problem if in the middle :
+        #     force = (np.array([self.pos[0], 1.5]) - self.pos) / np.linalg.norm((np.array([self.pos[0], 1.5]) - self.pos))
+
+        #     # autre méthode :
+        #     if 1.5 - self.pos[0] > 0:
+        #         print("stuck a droite")
+        #         force =  np.linalg.norm(np.array([self.pos[0], self.pos[1] + 0.1]) - self.pos)
+
+        #     else:
+        #         print("stuck a gauche")
+        #         force =  np.linalg.norm(np.array([self.pos[0], self.pos[1] - 0.1]) - self.pos)
+                
+
+        # # force = (np.array([self.pos[0], 1.5]) - self.pos) / np.linalg.norm((np.array([self.pos[0], 1.5]) - self.pos))
+
+
 
         # # if self.state == FIND_LANDING and self.speed_toggle:
         # if self.state == FIND_LANDING and len(self.edges):
