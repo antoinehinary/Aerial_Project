@@ -107,6 +107,7 @@ class Agent():
         self.goals = snake()
 
         self.datapoints = []
+        self.arrived = False
 
         # self.speed_toggle = False
         # self.waiting = False
@@ -138,10 +139,19 @@ class Agent():
             control_command = self.find_landing()
 
         elif self.state[-1] == FIND_STARTING:
-            self.goals = [self.starting_pos]
-            control_command = self.go_to()
+            control_command = self.find_starting()
 
         return control_command
+
+    def find_starting(self):
+        self.goals = [self.starting_pos]
+
+        if np.linalg.norm(self.pos-self.starting_pos) < 0.02:
+            self.state.pop()
+            self.arrived = True
+            return self.state_update()
+        else:
+            return self.go_to()
 
     def goal_near(self):
         sensors = ['range.front', 'range.left', 'range.back', 'range.right']
@@ -190,18 +200,34 @@ class Agent():
     def land(self):
 
         if self.height > 0.01:
+            speed = (self.pos_history[-1][0:2] - self.pos_history[-2][0:2])/(self.time_hist[-1]-self.time_hist[-2])
 
-            z = np.clip(self.height - 0.1, a_min=0., a_max=None)
+            if self.height < 0.8*self.z_target or np.linalg.norm(speed) < 0.01:
+                z = self.height - 0.2
+                control_command = [0, 0, z, 0]
+                return control_command
 
-            control_command = [0, 0, z, 0]
-            return control_command
+            else:
 
+                v_des = self.goals[0] - self.pos
+                v = rotmat(-self.yaw) @ v_des
+
+                control_command = [v[0], v[1], self.z_target, 0]
+                return control_command
         else:
-            self.state.pop()
-            print(self.state[-1])
-            return self.state_update()
+
+            if self.arrived:
+                self.alive = False
+                return [0, 0, 0, 0]
+            else:
+                self.state.pop()
+                print(self.state[-1])
+                return self.state_update()
 
     def detect_edge(self):
+
+        if np.linalg.norm(self.pos-self.starting_pos) < 1:
+            return
 
         hist = np.asarray(self.pos_history)
 
@@ -315,5 +341,10 @@ class Agent():
             force = rep_const/d**order
 
             f -= force * (do/d)
+
+        limx = 1/(np.abs(self.pos[0])+0.000001) - 1/(np.abs(3-self.pos[0])+0.000001)
+        limy = 1/(np.abs(self.pos[1])+0.000001) - 1/(np.abs(5-self.pos[1])+0.000001)
+
+        force += 0.01*np.array([limx, limy])
 
         return f
