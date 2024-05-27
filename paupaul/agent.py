@@ -284,7 +284,7 @@ class Agent():
         if np.linalg.norm(v) > 0.35:
             force -= 0.5*(v - 0.35*force/np.linalg.norm(force))
             # force -= 2*(v - force)
-            print("Speed limited")
+            # print("Speed limited")
 
         # if self.pos[1] < 0 and avoid_obstacles: 
         #     print("rep", repulsion_force[1])
@@ -303,7 +303,7 @@ class Agent():
 
         # switch alternative
         yaw_rate = 1
-        if int(time.time()) % 6 >= 2: yaw_rate *= -1
+        if time.time() % 6 >= 3: yaw_rate *= -1
 
         control_command = [v[0], v[1], z, yaw_rate]
 
