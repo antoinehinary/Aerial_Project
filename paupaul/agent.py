@@ -14,24 +14,24 @@ FIND_LANDING = 2
 FIND_STARTING = 3
 
 
-def return_snake(self):
+# def return_snake(self):
 
-    w = 10
-    h = 3
-    dx = 0.3
-    dy = 0.3
-    p = self.pos + np.array([h/2*dx, -w/2*dy])
+#     w = 10
+#     h = 3
+#     dx = 0.3
+#     dy = 0.3
+#     p = self.pos + np.array([h/2*dx, -w/2*dy])
 
-    goal_list = []
+#     goal_list = []
 
-    for i in range(h):
-        for j in range(w):
-            if i % 2 == 0:
-                goal_list.append(p + np.array([i*dx, j*dy]))
-            else:
-                goal_list.append(p + np.array([i*dx, (w-j-1)*dy]))
+#     for i in range(h):
+#         for j in range(w):
+#             if i % 2 == 0:
+#                 goal_list.append(p + np.array([i*dx, j*dy]))
+#             else:
+#                 goal_list.append(p + np.array([i*dx, (w-j-1)*dy]))
 
-    return goal_list
+#     return goal_list
 
 # def snake(self):
 
@@ -155,15 +155,15 @@ class Agent():
 
     def goal_near(self):
         # checks if the current goal (self.goals[0]) is near an obstacle
-        
+
         sensors = ['range.front', 'range.left', 'range.back', 'range.right']
         obstacles = [self.pos + self.sensor_data[sensor] *
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
-        
+
         for o in obstacles:
             # if the goal is less than 0.4 away from an obstacle and this obstacle is within 1m of the robol (to avoid pbm with far obstacles)
-            if np.linalg.norm(o-self.goals[0]) < 0.4 and np.linalg.norm(o-self.pos) < 1:
-            # if np.linalg.norm(o-self.goals[0]) < 0.4 :
+            if np.linalg.norm(o-self.goals[0]) < 0.4 and np.linalg.norm(o-self.pos) < 1.5:
+                # if np.linalg.norm(o-self.goals[0]) < 0.4 :
                 return True
 
         return False
@@ -243,41 +243,42 @@ class Agent():
             self.edges.append(pos)
             dp = self.pos - pos
             dp /= np.linalg.norm(dp)
-            self.goals = [pos + 0.01*dp]
 
+            self.goals = [pos + 0.1*dp]
+            # self.goals = [pos + 0.01*dp]
 
     def find_landing(self, verbose=True):
-        
-        ## eliminate current goal if near obstacle 
+
+        # eliminate current goal if near obstacle
         while self.goal_near():
             if len(self.goals) == 1:
                 print("Arrived at the end without seeing the pad")
                 self.alive = False
-                return [0,0,0,0]
+                return [0, 0, 0, 0]
             else:
                 self.goals.pop(0)
-                
-        ## eliminate current goal if robot is near the goal
+
+        # eliminate current goal if robot is near the goal
         if np.linalg.norm(self.pos - self.goals[0]) < 0.1:
             if len(self.goals) == 1:
                 print("Arrived at the end without seeing the pad")
                 self.alive = False
-                return [0,0,0,0]
+                return [0, 0, 0, 0]
             else:
                 self.goals.pop(0)
-        
+
         match len(self.edges):
             case 0:
                 self.detect_edge()
 
-                if len(self.edges) == 1:
-                    dp = self.goals[0]-self.pos
-                    dp /= np.linalg.norm(dp) + 0.00001  # prevent 0 division
+                # if len(self.edges) == 1:
+                #     dp = self.goals[0]-self.pos
+                #     dp /= np.linalg.norm(dp) + 0.00001  # prevent 0 division
 
-                    self.goals = [self.pos + 0.05*dp]  # new goal 0.05 meters forward
+                #     # self.goals = [self.pos + 0.05*dp]  # new goal 0.05 meters forward
 
-                    if verbose:
-                        print("First edge detected")
+                #     if verbose:
+                #         print("First edge detected")
             case 1:
                 if np.linalg.norm(self.goals[0]-self.pos) < 0.02:
                     self.state.pop()
@@ -317,7 +318,7 @@ class Agent():
         yaw_rate = 1*np.sin(time.time())
         # yaw_rate = 1.5*np.sin(time.time())
 
-        ## switch alternative
+        # switch alternative
         # yaw_rate = 1
         # if str(int(time.time()))[-1] >= '4': yaw_rate = -1
 
