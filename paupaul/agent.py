@@ -13,6 +13,44 @@ LAND = 1
 FIND_LANDING = 2
 FIND_STARTING = 3
 
+def trapezoidal_waveform(t, T=6, Tr=1, Tf=1, Th=2, Tl=2, H=1, L=-1):
+    """
+    Generate a trapezoidal waveform value at time t.
+
+    Parameters:
+    t (float): The time at which to evaluate the waveform.
+    T (float): The period of the waveform.
+    Tr (float): The rise time.
+    Tf (float): The fall time.
+    Th (float): The high level dwell time.
+    Tl (float): The low level dwell time.
+    H (float): The high level of the waveform.
+    L (float): The low level of the waveform.
+
+    Returns:
+    float: The waveform value at time t.
+    """
+    # Normalize time to the period
+    t_mod = t % T
+
+    # Determine the value of the waveform based on the phase within the period
+    if 0 <= t_mod < Tr:
+        # Rising edge
+        return L + (H - L) * (t_mod / Tr)
+    elif Tr <= t_mod < Tr + Th:
+        # High level
+        return H
+    elif Tr + Th <= t_mod < Tr + Th + Tf:
+        # Falling edge
+        return H - (H - L) * ((t_mod - Tr - Th) / Tf)
+    elif Tr + Th + Tf <= t_mod < T:
+        # Low level
+        return L
+    else:
+        # This should not happen
+        return L
+
+
 
 def snake():
 
@@ -320,12 +358,14 @@ class Agent():
         #     if(self.sensor_data['stabilizer.yaw'] < -20): #-30 degrees
         #         self.computed_yaw_rate = -0.5
         #         self.case = 'turning_right'
-            
+        
      
 
         # # switch alternative
-        yaw_rate = 1
+        # yaw_rate = 1
         # if time.time() % 6 >= 3: yaw_rate *= -1
+
+        yaw_rate = trapezoidal_waveform(time.time())
 
         control_command = [v[0], v[1], z, yaw_rate]
 
