@@ -70,6 +70,12 @@ class Agent():
         self.datapoints = []
         self.arrived = False
 
+
+        self.case = 'turning_right' 
+        self.computed_yaw_rate = -0.5
+
+
+
         # self.speed_toggle = False
         # self.waiting = False
 
@@ -105,6 +111,7 @@ class Agent():
         return control_command
 
     def find_starting(self):
+
         self.goals = [self.starting_pos]
 
         if np.linalg.norm(self.pos-self.starting_pos) < 0.02:
@@ -301,9 +308,24 @@ class Agent():
         # yaw_rate = 1.0*np.sin(time.time())
         # yaw_rate = 1*np.sin(time.time()/2)
 
-        # switch alternative
+
+        # if self.case == 'turning_right' :
+        #     self.computed_yaw_rate = -0.5
+        #     if(self.sensor_data['stabilizer.yaw'] > 20): #30 degrees
+        #         self.computed_yaw_rate = 0.5
+        #         self.case = 'turning_left'
+                
+        # elif self.case == 'turning_left' :
+        #     self.computed_yaw_rate = 0.5
+        #     if(self.sensor_data['stabilizer.yaw'] < -20): #-30 degrees
+        #         self.computed_yaw_rate = -0.5
+        #         self.case = 'turning_right'
+            
+     
+
+        # # switch alternative
         yaw_rate = 1
-        if time.time() % 6 >= 3: yaw_rate *= -1
+        # if time.time() % 6 >= 3: yaw_rate *= -1
 
         control_command = [v[0], v[1], z, yaw_rate]
 
