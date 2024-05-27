@@ -154,14 +154,17 @@ class Agent():
             return self.go_to()
 
     def goal_near(self):
+        # checks if the current goal (self.goals[0]) is near an obstacle
+        
         sensors = ['range.front', 'range.left', 'range.back', 'range.right']
         obstacles = [self.pos + self.sensor_data[sensor] *
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
-
-        if self.state[-1] == FIND_LANDING:
-            for o in obstacles:
-                if np.linalg.norm(o-self.goals[0]) < 0.4:
-                    return True
+        
+        for o in obstacles:
+            # if the goal is less than 0.4 away from an obstacle and this obstacle is within 1m of the robol (to avoid pbm with far obstacles)
+            if np.linalg.norm(o-self.goals[0]) < 0.4 and np.linalg.norm(o-self.pos) < 1:
+            # if np.linalg.norm(o-self.goals[0]) < 0.4 :
+                return True
 
         return False
 
@@ -171,9 +174,6 @@ class Agent():
         obstacles = [self.pos + self.sensor_data[sensor] *
                      direction_vector(self.yaw + i*np.pi/2)/1000 for i, sensor in enumerate(sensors)]
 
-        while self.goal_near():
-            self.goals.pop(0)
-
         self.obst = sorted(np.concatenate([self.obst, obstacles], axis=0).tolist(),
                            key=lambda x: np.linalg.norm(x-self.pos))
         self.obst = np.asarray(self.obst)[0:4]  # keep only 4 nearest
@@ -182,13 +182,7 @@ class Agent():
 
         if self.height < 0.9*self.z_target:
 
-            # v_des = self.starting_pos - self.pos
-            # v = rotmat(-self.yaw) @ v_des
             z = np.clip(self.z_target, a_min=None, a_max=self.height+0.3)
-
-            # yaw = 0
-
-            # control_command = [v[0], v[1], z, yaw]
             control_command = [0, 0, z, 0]
 
             return control_command
@@ -251,13 +245,27 @@ class Agent():
             dp /= np.linalg.norm(dp)
             self.goals = [pos + 0.01*dp]
 
-    # def wait(self, t):
-    #     self.stop_time = time.time() + t
-    #     self.waiting = True
-    #     self.wait_pos = np.copy(self.pos)
 
     def find_landing(self, verbose=True):
-
+        
+        ## eliminate current goal if near obstacle 
+        while self.goal_near():
+            if len(self.goals) == 1:
+                print("Arrived at the end without seeing the pad")
+                self.alive = False
+                return [0,0,0,0]
+            else:
+                self.goals.pop(0)
+                
+        ## eliminate current goal if robot is near the goal
+        if np.linalg.norm(self.pos - self.goals[0]) < 0.1:
+            if len(self.goals) == 1:
+                print("Arrived at the end without seeing the pad")
+                self.alive = False
+                return [0,0,0,0]
+            else:
+                self.goals.pop(0)
+        
         match len(self.edges):
             case 0:
                 self.detect_edge()
@@ -288,40 +296,30 @@ class Agent():
         dp = self.goals[0]-self.pos
         d = np.linalg.norm(dp)+0.0001  # prevent 0 division
 
-        if self.state[-1] == FIND_LANDING and d < 0.1 and len(self.goals) > 1:
-            self.goals.pop(0)
-            return self.go_to()
-
         force = 0.4*dp/d
 
         if avoid_obstacles:
             repulsion_force = self.repulsion_force(self.pos)
             force += repulsion_force
 
-        # # if self.state == FIND_LANDING and self.speed_toggle:
-        # if self.state == FIND_LANDING and len(self.edges):
-        #     force *= 0.2/np.linalg.norm(force)
-
         dp = self.goals[0]-self.pos
 
-        # speed control
+        # speed control near goal
         if np.linalg.norm(dp) < 0.05:
             force = dp
 
         v_des = force
 
-        # v_feedback = 0.5*((self.pos_history[-1][0:2] - self.pos_history[-2][0:2]) /
-        #                   (self.time_hist[-1]-self.time_hist[-2]) - v_des)
-
-        # v = rotmat(-self.yaw) @ (v_des - v_feedback)
         v = rotmat(-self.yaw) @ v_des
 
         z = self.z_target
 
         yaw_rate = 1*np.sin(time.time())
+        # yaw_rate = 1.5*np.sin(time.time())
 
+        ## switch alternative
         # yaw_rate = 1
-        # if str(int(time.time()))[-1] == '0': yaw_rate = -1
+        # if str(int(time.time()))[-1] >= '4': yaw_rate = -1
 
         control_command = [v[0], v[1], z, yaw_rate]
 
