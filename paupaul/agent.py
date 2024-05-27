@@ -54,7 +54,7 @@ def trapezoidal_waveform(t, T=6, Tr=1, Tf=1, Th=2, Tl=2, H=1, L=-1):
 
 def snake():
 
-    layers_x = 4
+    layers_x = 6
     layers_y = 9
     dx = 0.3
     dy = 0.3
@@ -232,7 +232,7 @@ class Agent():
 
         hist = np.asarray(self.pos_history)
 
-        p, info = find_peaks(-hist[:, 2], prominence=0.05)
+        p, info = find_peaks(-hist[:, 2], prominence=0.06) ## 0.05
 
         if len(p) == 1:
 
@@ -312,7 +312,7 @@ class Agent():
         dp = self.goals[0]-self.pos
         d = np.linalg.norm(dp)+0.0001  # prevent 0 division
 
-        force = 0.35*dp/d
+        force = 0.3*dp/d
 
         if avoid_obstacles:
             repulsion_force = self.repulsion_force(self.pos)
@@ -373,7 +373,7 @@ class Agent():
 
     def repulsion_force(self, pos):
 
-        rep_const = 0.02
+        rep_const = 0.013
         order = 1
 
         f = np.zeros((2,))
