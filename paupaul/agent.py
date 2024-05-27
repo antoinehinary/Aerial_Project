@@ -14,52 +14,13 @@ FIND_LANDING = 2
 FIND_STARTING = 3
 
 
-# def return_snake(self):
-
-#     w = 10
-#     h = 3
-#     dx = 0.3
-#     dy = 0.3
-#     p = self.pos + np.array([h/2*dx, -w/2*dy])
-
-#     goal_list = []
-
-#     for i in range(h):
-#         for j in range(w):
-#             if i % 2 == 0:
-#                 goal_list.append(p + np.array([i*dx, j*dy]))
-#             else:
-#                 goal_list.append(p + np.array([i*dx, (w-j-1)*dy]))
-
-#     return goal_list
-
-# def snake(self):
-
-#     w = 10
-#     h = 3
-#     dx = 0.3
-#     dy = 0.3
-#     p = self.pos + np.array([h/2*dx, -w/2*dy])
-
-#     goal_list = []
-
-#     for i in range(h):
-#         for j in range(w):
-#             if i % 2 == 0:
-#                 goal_list.append(p + np.array([i*dx, j*dy]))
-#             else:
-#                 goal_list.append(p + np.array([i*dx, (w-j-1)*dy]))
-
-#     return goal_list
-
-
 def snake():
 
-    layers_x = 5
-    layers_y = 8
+    layers_x = 4
+    layers_y = 9
     dx = 0.3
     dy = 0.3
-    start_p = np.array([3.3, 0.3])
+    start_p = np.array([3.7, 0.2])
 
     goal_list = []
 
@@ -197,7 +158,7 @@ class Agent():
             speed = (self.pos_history[-1][0:2] - self.pos_history[-2][0:2])/(self.time_hist[-1]-self.time_hist[-2])
 
             if self.height < 0.8*self.z_target or np.linalg.norm(speed) < 0.01:
-                z = self.height - 0.2
+                z = self.height - 0.25
                 control_command = [0, 0, z, 0]
                 return control_command
 
@@ -211,6 +172,7 @@ class Agent():
         else:
 
             if self.arrived:
+                print("Arrived at destination")
                 self.alive = False
                 return [0, 0, 0, 0]
             else:
@@ -232,6 +194,9 @@ class Agent():
             index = info['left_bases'][0]
             pos = hist[index, 0:2]
 
+            if not len(self.edges) and np.linalg.norm(self.starting_pos-pos) < 1:
+                return
+
             self.datapoints.append(self.time_hist[index])
             # self.datapoints.append(self.time_hist[info['right_bases'][0]])
 
@@ -240,31 +205,36 @@ class Agent():
 
             # self.pos_history.clear()
             # self.time_hist.clear()
+
             self.edges.append(pos)
-            dp = self.pos - pos
-            dp /= np.linalg.norm(dp)
+            # dp = self.pos - pos
+            # dp /= np.linalg.norm(dp)
 
             self.goals = [pos + 0.1*dp]
-            # self.goals = [pos + 0.01*dp]
+            # self.goals = [self.pos]
+
+            # self.goals = [pos + 0.0*dp]
 
     def find_landing(self, verbose=True):
 
         # eliminate current goal if near obstacle
-        while self.goal_near():
+        while self.goal_near() and not len(self.edges):
             if len(self.goals) == 1:
                 print("Arrived at the end without seeing the pad")
                 self.alive = False
                 return [0, 0, 0, 0]
             else:
+                print("Obstacle near goal:", self.goals[0])
                 self.goals.pop(0)
 
         # eliminate current goal if robot is near the goal
-        if np.linalg.norm(self.pos - self.goals[0]) < 0.1:
+        if np.linalg.norm(self.pos - self.goals[0]) < 0.1 and not len(self.edges):
             if len(self.goals) == 1:
                 print("Arrived at the end without seeing the pad")
                 self.alive = False
                 return [0, 0, 0, 0]
             else:
+                print("Robot near goal:", self.goals[0])
                 self.goals.pop(0)
 
         match len(self.edges):
@@ -297,7 +267,7 @@ class Agent():
         dp = self.goals[0]-self.pos
         d = np.linalg.norm(dp)+0.0001  # prevent 0 division
 
-        force = 0.4*dp/d
+        force = 0.35*dp/d
 
         if avoid_obstacles:
             repulsion_force = self.repulsion_force(self.pos)
@@ -309,14 +279,18 @@ class Agent():
         if np.linalg.norm(dp) < 0.05:
             force = dp
 
+        # if np.linalg.norm(force) > 0.35:
+        #     force *= 0.35/np.linalg.norm(force)
+        #     print("Speed limited")
+
         v_des = force
 
         v = rotmat(-self.yaw) @ v_des
 
         z = self.z_target
 
-        yaw_rate = 1*np.sin(time.time())
-        # yaw_rate = 1.5*np.sin(time.time())
+        # yaw_rate = 1*np.sin(time.time())
+        yaw_rate = 1.0*np.sin(time.time())
 
         # switch alternative
         # yaw_rate = 1
@@ -344,6 +318,6 @@ class Agent():
         limx = 1/(np.abs(self.pos[0])+0.000001) - 1/(np.abs(3-self.pos[0])+0.000001)
         limy = 1/(np.abs(self.pos[1])+0.000001) - 1/(np.abs(5-self.pos[1])+0.000001)
 
-        force += 0.01*np.array([limx, limy])
+        force += 0.03*np.array([limx, limy])
 
         return f

@@ -4,11 +4,11 @@ import matplotlib.pyplot as plt
 
 def snake():
 
-    layers_x = 5
-    layers_y = 8
+    layers_x = 4
+    layers_y = 9
     dx = 0.3
     dy = 0.3
-    start_p = np.array([3.3, 0.3])
+    start_p = np.array([3.7, 0.2])
 
     goal_list = []
 

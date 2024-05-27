@@ -176,7 +176,7 @@ if __name__ == '__main__':
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
 
-    start_pos = np.array([1.5, 0.5])
+    start_pos = np.array([1.25, 2.5])
     robot = agent.Agent(le.sensor_data, start_pos)
     robot.update(le.sensor_data)
 
@@ -207,16 +207,9 @@ if __name__ == '__main__':
 
         t.append(time.time())
         vz.append(le.sensor_data['stateEstimate.vz'])
-        x.append(le.sensor_data['stateEstimate.x'])
-        y.append(le.sensor_data['stateEstimate.y'])
+        x.append(le.sensor_data['stateEstimate.x'] + start_pos[0])
+        y.append(le.sensor_data['stateEstimate.y'] + start_pos[1])
         z_list.append(le.sensor_data['stateEstimate.z'])
-
-        # if robot.state != current_state:
-        #     changes.append(t[-1])
-        #     current_state = int(robot.state)
-        # if len(robot.edges) != current_edges:
-        #     changes.append(t[-1])
-        #     current_edges = len(robot.edges)
 
         if keyboard.is_pressed('q'):
             keypressed.append(1)
