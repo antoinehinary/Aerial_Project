@@ -20,7 +20,7 @@ def snake():
     layers_y = 9
     dx = 0.3
     dy = 0.3
-    start_p = np.array([3.7, 0.2])
+    start_p = np.array([3.7, 0.25])
 
     goal_list = []
 
@@ -207,8 +207,8 @@ class Agent():
             # self.time_hist.clear()
 
             self.edges.append(pos)
-            # dp = self.pos - pos
-            # dp /= np.linalg.norm(dp)
+            dp = self.pos - pos
+            dp /= np.linalg.norm(dp)
 
             self.goals = [pos + 0.1*dp]
             # self.goals = [self.pos]
@@ -279,9 +279,17 @@ class Agent():
         if np.linalg.norm(dp) < 0.05:
             force = dp
 
-        # if np.linalg.norm(force) > 0.35:
-        #     force *= 0.35/np.linalg.norm(force)
-        #     print("Speed limited")
+        v = (self.pos_history[-1][0:2] - self.pos_history[-2][0:2])/(self.time_hist[-1]-self.time_hist[-2])
+
+        if np.linalg.norm(v) > 0.35:
+            force -= 0.5*(v - 0.35*force/np.linalg.norm(force))
+            # force -= 2*(v - force)
+            print("Speed limited")
+
+        # if self.pos[1] < 0 and avoid_obstacles: 
+        #     print("rep", repulsion_force[1])
+        #     print("force", force[1])
+
 
         v_des = force
 
@@ -290,11 +298,12 @@ class Agent():
         z = self.z_target
 
         # yaw_rate = 1*np.sin(time.time())
-        yaw_rate = 1.0*np.sin(time.time())
+        # yaw_rate = 1.0*np.sin(time.time())
+        # yaw_rate = 1*np.sin(time.time()/2)
 
         # switch alternative
-        # yaw_rate = 1
-        # if str(int(time.time()))[-1] >= '4': yaw_rate = -1
+        yaw_rate = 1
+        if int(time.time()) % 6 >= 2: yaw_rate *= -1
 
         control_command = [v[0], v[1], z, yaw_rate]
 
@@ -315,9 +324,14 @@ class Agent():
 
             f -= force * (do/d)
 
-        limx = 1/(np.abs(self.pos[0])+0.000001) - 1/(np.abs(3-self.pos[0])+0.000001)
-        limy = 1/(np.abs(self.pos[1])+0.000001) - 1/(np.abs(5-self.pos[1])+0.000001)
+        limx = 1/(np.abs(self.pos[0])+0.00000001) - 1/(np.abs(5-self.pos[0])+0.00000001)
+        limy = 1/(np.abs(self.pos[1])+0.00000001) - 1/(np.abs(3-self.pos[1])+0.00000001)
 
-        force += 0.03*np.array([limx, limy])
+        
+        border_force = rep_const*np.array([limx, limy])
+
+        # print(limy)
+        # print(border_force[1])
+        f += border_force
 
         return f

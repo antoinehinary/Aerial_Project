@@ -176,7 +176,7 @@ if __name__ == '__main__':
     cf.param.set_value('kalman.resetEstimation', '0')
     time.sleep(2)
 
-    start_pos = np.array([1.25, 2.5])
+    start_pos = np.array([1.8, 0.3])
     robot = agent.Agent(le.sensor_data, start_pos)
     robot.update(le.sensor_data)
 
@@ -255,13 +255,20 @@ if __name__ == '__main__':
         plt.plot(x, y, label="Trajectory")
         edges = np.asarray(robot.edges)
 
-        plt.scatter(edges[:, 0], edges[:, 1], marker="o", label=f"{len(edges)} Edges", color="g")
+        snake = agent.snake()
+        for i, val in enumerate(snake):
+            plt.scatter(val[0], val[1])
+            plt.text(val[0], val[1], str(i), fontsize=9, ha='center', va='bottom')
+
+        # plt.scatter(edges[:, 0], edges[:, 1], marker="o", label=f"{len(edges)} Edges", color="g")
         # plt.scatter(datapoints[:, 0], datapoints[:, 1], marker="+", label="Datapoints", color="pink")
-        plt.scatter(np.mean(edges[0:2], axis=0)[0],  np.mean(edges[0:2], axis=0)[1], marker="x", color="g")
+        # plt.scatter(np.mean(edges[0:2], axis=0)[0],  np.mean(edges[0:2], axis=0)[1], marker="x", color="g")
         plt.scatter(robot.goals[0][0], robot.goals[0][1], marker="x", color="r")
         plt.xlabel("X [m]")
         plt.ylabel("Y [m]")
-        # plt.legend()
+        plt.xlim(0,5)
+        plt.ylim(0,3)
+
         plt.gca().set_aspect('equal', adjustable='box')
         plt.savefig(os.path.join("paupaul", "logs", "trajectory"))
         plt.show()
